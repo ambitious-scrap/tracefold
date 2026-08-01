@@ -1,0 +1,4 @@
+System: Return exact values.
+Limit: 15 ms for API.
+If enabled, use it except maintenance.
+Correction: use 20 ms instead.

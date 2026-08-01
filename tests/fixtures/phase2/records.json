@@ -1,0 +1,1 @@
+{"records":[{"id":"ok-1","value":15,"unit":"ms","owner":"api","status":"ok"},{"id":"bad-1","value":20,"unit":"ms","owner":"api","status":"error","trace_id":"t-1"}]}
