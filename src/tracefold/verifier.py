@@ -13,6 +13,7 @@ from tracefold.hashing import hash_canonical, sha256_domain
 from tracefold.schemas.api import QueryEnvelope
 from tracefold.schemas.certificate import SourceMapCoverage
 from tracefold.schemas.common import (
+    ArtifactStage,
     Completeness,
     DiscoveryStatus,
     FailedInvariant,
@@ -63,6 +64,7 @@ class VerificationEvidence:
     normalized_source: Any | None = None
     source_map: SourceMap | None = None
     original_source_map: SourceMap | None = None
+    prior_raw_result: RawCompressionResult | None = None
     query: str | None = None
     compressed_text: str | None = None
     verification_run_id: str = DEFAULT_VERIFICATION_RUN_ID
@@ -1105,6 +1107,62 @@ def _verify_recovery_state(certificate: Any, failures: list[FailedInvariant]) ->
             code="RECOVERY_HISTORY_HEAD_MISMATCH",
             message="recovery history head is incorrect",
         )
+    if certificate.artifact_role == "end_to_end":
+        previous: str | None = None
+        for index, record in enumerate(certificate.recovery_history):
+            if record.sequence != index:
+                _failure(
+                    failures,
+                    kind="policy",
+                    code="RECOVERY_SEQUENCE_MISMATCH",
+                    message="recovery history sequence is not contiguous",
+                    recovery_hint="full_fallback",
+                )
+            if record.previous_event_hash != previous:
+                _failure(
+                    failures,
+                    kind="policy",
+                    code="RECOVERY_PARENT_MISMATCH",
+                    message="recovery history parent hash is incorrect",
+                    recovery_hint="full_fallback",
+                )
+            payload = record.model_dump(mode="json", exclude={"event_hash"})
+            expected_event = sha256_domain(
+                HashDomain.RECOVERY_EVENT,
+                canonical_json_bytes(payload),
+            )
+            if record.event_hash != expected_event:
+                _failure(
+                    failures,
+                    kind="hash",
+                    code="RECOVERY_EVENT_HASH_MISMATCH",
+                    message="recovery event hash is not independently recomputed",
+                    recovery_hint="full_fallback",
+                )
+            previous = record.event_hash
+        if (
+            certificate.action.selected_action == FinalAction.RESTORE_SPANS
+            and not certificate.restored_spans
+        ):
+            _failure(
+                failures,
+                kind="policy",
+                code="RESTORATION_RECORD_MISSING",
+                message="restore_spans action requires restored span records",
+                recovery_hint="full_fallback",
+            )
+        if (
+            certificate.action.selected_action == FinalAction.FULL_FALLBACK
+            and certificate.fallback_reason is None
+        ):
+            _failure(
+                failures,
+                kind="policy",
+                code="FALLBACK_REASON_MISSING",
+                message="full_fallback action requires fallback reason",
+                recovery_hint="full_fallback",
+            )
+        return
     if certificate.recovery_history:
         _failure(
             failures,
@@ -1129,12 +1187,12 @@ def _verify_recovery_state(certificate: Any, failures: list[FailedInvariant]) ->
 
 
 def _verify_certificate_shape(certificate: Any, failures: list[FailedInvariant]) -> None:
-    if certificate.artifact_role not in {"raw", "certified"}:
+    if certificate.artifact_role not in {"raw", "certified", "end_to_end"}:
         _failure(
             failures,
             kind="policy",
             code="UNSUPPORTED_ARTIFACT_ROLE",
-            message="Phase 4 accepts only raw or certified certificate artifacts",
+            message="certificate artifact role is unsupported",
         )
     if certificate.verification_status not in {"indeterminate", "passed"}:
         _failure(
@@ -1143,20 +1201,34 @@ def _verify_certificate_shape(certificate: Any, failures: list[FailedInvariant])
             code="UNSUPPORTED_VERIFICATION_STATUS",
             message="certificate status is not a Phase 4 candidate or sealed status",
         )
-    if certificate.verification_status == "indeterminate" and certificate.artifact_role != "raw":
+    if certificate.verification_status == "indeterminate" and certificate.artifact_role not in {
+        "raw"
+    }:
         _failure(
             failures,
             kind="policy",
             code="CANDIDATE_ROLE_STATUS_MISMATCH",
             message="indeterminate candidates must carry raw artifact role",
         )
-    if certificate.verification_status == "passed" and certificate.artifact_role != "certified":
+    if certificate.verification_status == "passed" and certificate.artifact_role not in {
+        "certified",
+        "end_to_end",
+    }:
         _failure(
             failures,
             kind="policy",
             code="SEALED_ROLE_STATUS_MISMATCH",
             message="passed certificates must carry certified artifact role",
         )
+    if certificate.artifact_role == "end_to_end":
+        if certificate.risk.match != (certificate.risk.score == certificate.risk.recomputed_score):
+            _failure(
+                failures,
+                kind="policy",
+                code="RISK_MATCH_FLAG_MISMATCH",
+                message="end-to-end risk match flag is inconsistent",
+            )
+        return
     if certificate.risk.calibration_status != "not_available":
         _failure(
             failures,
@@ -1181,6 +1253,57 @@ def _verify_certificate_shape(certificate: Any, failures: list[FailedInvariant])
             code="RISK_DATA_NOT_ALLOWED",
             message="Phase 4 certificates cannot carry risk values",
         )
+
+
+def _verify_restored_spans(
+    certificate: Any,
+    source_map: SourceMap,
+    failures: list[FailedInvariant],
+) -> None:
+    if certificate.artifact_role != "end_to_end":
+        return
+    spans = {item.span_id: item for item in source_map.spans}
+    output_artifacts = {
+        item.artifact_id
+        for item in source_map.artifacts
+        if item.stage in {ArtifactStage.RAW_COMPRESSED, ArtifactStage.FINAL_COMPRESSED}
+    }
+    for restored in certificate.restored_spans:
+        original = spans.get(restored.source_span_id)
+        output = spans.get(restored.compressed_span_id)
+        if original is None or output is None or output.artifact_id not in output_artifacts:
+            _failure(
+                failures,
+                kind="source_map",
+                code="RESTORED_SPAN_NOT_MAPPED",
+                message="restored span does not resolve in supplied source map",
+                recovery_hint="full_fallback",
+            )
+            continue
+        if (
+            original.span_hash != restored.original_hash
+            or output.span_hash != restored.inserted_hash
+        ):
+            _failure(
+                failures,
+                kind="hash",
+                code="RESTORED_SPAN_HASH_MISMATCH",
+                message="restored span hash is not bound to source-map spans",
+                recovery_hint="full_fallback",
+            )
+        if not any(
+            restored.source_span_id in mapping.from_span_ids
+            and restored.compressed_span_id in mapping.to_span_ids
+            and mapping.exactness == "byte_exact"
+            for mapping in source_map.mappings
+        ):
+            _failure(
+                failures,
+                kind="source_map",
+                code="RESTORED_SPAN_NOT_EXACT",
+                message="restored span lacks byte-exact source-map lineage",
+                recovery_hint="full_fallback",
+            )
 
 
 def _source_map_coverage(
@@ -1257,6 +1380,40 @@ def _recommended_action(
     ):
         return FinalAction.FULL_FALLBACK
     return FinalAction.FULL_FALLBACK if failures else FinalAction.EMIT
+
+
+def _end_to_end_action_valid(
+    certificate: Any,
+    recommended: FinalAction,
+) -> bool:
+    if certificate.action.recomputed_action != certificate.action.selected_action:
+        return False
+    if not certificate.action.match:
+        return False
+    history = certificate.recovery_history
+    if not history:
+        return (
+            certificate.action.selected_action == FinalAction.EMIT
+            and recommended == FinalAction.EMIT
+        )
+    last_action = history[-1].action_taken
+    selected = certificate.action.selected_action
+    if selected == FinalAction.FULL_FALLBACK:
+        return last_action == FinalAction.FULL_FALLBACK and certificate.fallback_reason is not None
+    if selected == FinalAction.RESTORE_SPANS:
+        return (
+            any(item.action_taken == FinalAction.RESTORE_SPANS for item in history)
+            and last_action == FinalAction.EMIT
+            and bool(certificate.restored_spans)
+            and recommended == FinalAction.EMIT
+        )
+    if selected == FinalAction.EXPAND_BUDGET:
+        return (
+            any(item.action_taken == FinalAction.EXPAND_BUDGET for item in history)
+            and last_action == FinalAction.EMIT
+            and recommended == FinalAction.EMIT
+        )
+    return bool(selected == FinalAction.EMIT and last_action == FinalAction.EMIT)
 
 
 def verify_certificate(
@@ -1556,6 +1713,7 @@ def verify_certificate(
                 source, normalized, output, source_map, manifest, failures
             )
             _verify_synthesized_markers(source_map, output, failures)
+            _verify_restored_spans(certificate, source_map, failures)
             _verify_hash_observation(
                 certificate.artifacts.source_map,
                 actual_map_hash,
@@ -1585,10 +1743,14 @@ def verify_certificate(
                     code="HASH_MISMATCH",
                     message="certificate compressed hash does not match compressed bytes",
                 )
+            raw_context_hash = verified_compressed_hash
             if (
-                certificate.artifacts.raw_compressed_context.claimed_hash
-                != verified_compressed_hash
+                certificate.artifact_role == "end_to_end"
+                and evidence.prior_raw_result is not None
+                and evidence.prior_raw_result.compressed_hash is not None
             ):
+                raw_context_hash = evidence.prior_raw_result.compressed_hash
+            if certificate.artifacts.raw_compressed_context.claimed_hash != raw_context_hash:
                 _failure(
                     failures,
                     kind="hash",
@@ -1603,7 +1765,7 @@ def verify_certificate(
             )
             _verify_hash_observation(
                 certificate.artifacts.raw_compressed_context,
-                verified_compressed_hash,
+                raw_context_hash,
                 failures,
                 label="raw_compressed_context",
             )
@@ -1889,7 +2051,16 @@ def verify_certificate(
     recommended = _recommended_action(raw_result, failures, discovery)
     if (unverifiable and not failures) or internal_failure:
         recommended = FinalAction.FULL_FALLBACK
-    if certificate.action.selected_action != recommended:
+    if certificate.artifact_role == "end_to_end":
+        if not _end_to_end_action_valid(certificate, recommended):
+            _failure(
+                failures,
+                kind="policy",
+                code="END_TO_END_ACTION_MISMATCH",
+                message="end-to-end action disagrees with recovery history or final verification",
+                recovery_hint="full_fallback",
+            )
+    elif certificate.action.selected_action != recommended:
         _failure(
             failures,
             kind="policy",
@@ -1897,7 +2068,10 @@ def verify_certificate(
             message="certificate selected action disagrees with independent policy",
             recovery_hint="full_fallback",
         )
-    if certificate.action.recomputed_action != recommended:
+    if (
+        certificate.artifact_role != "end_to_end"
+        and certificate.action.recomputed_action != recommended
+    ):
         _failure(
             failures,
             kind="policy",

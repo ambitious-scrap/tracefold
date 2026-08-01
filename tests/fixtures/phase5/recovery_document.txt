@@ -1,0 +1,4 @@
+System: return JSON only.
+The service timeout is 15 ms for the primary owner.
+Correction: the service timeout is 20 ms for the primary owner.
+Except during maintenance, the service must remain available.

@@ -14,6 +14,21 @@ from tracefold.schemas.phase4 import (
     VerifiedObligationResult,
     VerifiedRelationResult,
 )
+from tracefold.schemas.phase5 import (
+    CalibrationModel,
+    CalibrationPoint,
+    CalibrationRecord,
+    CalibrationStatus,
+    Phase5Report,
+    RecoveryAttempt,
+    RecoveryFailure,
+    RecoveryHistory,
+    RecoveryPlan,
+    RecoveryRequest,
+    RecoveryResult,
+    StructuralRiskAssessment,
+    StructuralRiskFeatures,
+)
 from tracefold.schemas.source import SourceInput, SourceManifest, SourceManifestEntry
 from tracefold.schemas.source_map import SourceMap
 
@@ -32,6 +47,19 @@ __all__ = [
     "VerifiedRelationResult",
     "VerificationReport",
     "VerificationReportStatus",
+    "CalibrationModel",
+    "CalibrationPoint",
+    "CalibrationRecord",
+    "CalibrationStatus",
+    "Phase5Report",
+    "RecoveryAttempt",
+    "RecoveryFailure",
+    "RecoveryHistory",
+    "RecoveryPlan",
+    "RecoveryRequest",
+    "RecoveryResult",
+    "StructuralRiskAssessment",
+    "StructuralRiskFeatures",
     "SourceInput",
     "SourceManifest",
     "SourceManifestEntry",

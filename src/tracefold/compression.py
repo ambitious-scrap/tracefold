@@ -1607,6 +1607,53 @@ def _source_hash(source: SourceArtifact) -> HashValue:
     return sha256_domain(HashDomain.SOURCE_ARTIFACT, source.raw_bytes)
 
 
+def _mark_recovery_candidates(
+    candidates: Sequence[CompressionCandidate],
+    requested_span_ids: object,
+    available_spans: Iterable[SourceSpan],
+) -> tuple[CompressionCandidate, ...]:
+    if not isinstance(requested_span_ids, str):
+        return tuple(candidates)
+    requested = {item for item in requested_span_ids.split(",") if item}
+    if not requested:
+        return tuple(candidates)
+    requested_ranges = [
+        (span.char_start, span.char_end) for span in available_spans if span.span_id in requested
+    ]
+    requested_ranges.extend(
+        (span.char_start, span.char_end)
+        for candidate in candidates
+        for span in candidate.original_source_spans
+        if span.span_id in requested
+    )
+    if not requested_ranges:
+        return tuple(candidates)
+    restored: list[CompressionCandidate] = []
+    for candidate in candidates:
+        selected = any(
+            span.span_id in requested
+            or any(
+                _overlaps(
+                    (span.char_start, span.char_end),
+                    requested_range,
+                )
+                for requested_range in requested_ranges
+            )
+            for span in candidate.original_source_spans
+        )
+        restored.append(
+            candidate.model_copy(
+                update={
+                    "mandatory": True,
+                    "priority_class": CandidatePriority.MANDATORY,
+                }
+            )
+            if selected
+            else candidate
+        )
+    return tuple(restored)
+
+
 def compress_source(
     request: RawCompressionRequest,
     source: SourceArtifact,
@@ -1692,6 +1739,11 @@ def compress_source(
     )
     try:
         candidates = build_candidates(source, extraction, tokenizer)
+        candidates = _mark_recovery_candidates(
+            candidates,
+            request.deterministic_options.get("restore_span_ids"),
+            extraction.spans,
+        )
         mandatory = calculate_mandatory_set(candidates, tokenizer)
         selection = select_candidates(candidates, mandatory, budget, tokenizer)
         if not selection.fits_budget:
@@ -1755,7 +1807,8 @@ def compress_source(
         if extraction.content_type == ContentType.PYTHON:
             ast.parse(output_text, filename=source.file_path or "<tracefold>")
         output_tokens = tokenizer.count(output_text)
-        if output_tokens >= original_tokens:
+        force_full = request.deterministic_options.get("force_full") is True
+        if force_full or output_tokens >= original_tokens:
             if text:
                 full = _candidate_for_full_source(source, extraction, tokenizer)
                 selected = [full]
