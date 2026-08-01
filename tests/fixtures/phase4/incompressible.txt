@@ -1,0 +1,2 @@
+System instruction: preserve each distinct identifier exactly: alpha-001 beta-002 gamma-003 delta-004 epsilon-005.
+Do not omit the prohibition, exception, deadline 2027-04-15, time 17:30 UTC, version 4.2.1, or owner migration-control.

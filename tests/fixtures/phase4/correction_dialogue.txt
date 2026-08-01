@@ -1,0 +1,5 @@
+system: Follow the incident-response instructions.
+developer: Keep the request identifier and deadline exact.
+user: Schedule the migration for 2027-04-14.
+assistant: I will schedule the migration for 2027-04-14.
+user: Actually, schedule it for 2027-04-15 instead.

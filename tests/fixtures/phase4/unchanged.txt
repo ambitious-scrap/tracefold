@@ -1,0 +1,1 @@
+One unique sentence remains unchanged because no safe duplicate exists.

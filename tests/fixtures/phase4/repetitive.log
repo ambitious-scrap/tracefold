@@ -1,0 +1,5 @@
+2027-04-15T17:20:00Z INFO service=api event_id=heartbeat
+2027-04-15T17:20:01Z INFO service=api event_id=heartbeat
+2027-04-15T17:20:02Z INFO service=api event_id=heartbeat
+2027-04-15T17:20:03Z WARN service=api event_id=slow
+2027-04-15T17:20:04Z ERROR service=api trace=t-critical event_id=e-1 caused_by=heartbeat error_code=E42 DatabaseError

@@ -1,0 +1,7 @@
+[
+  {"id":"normal","status":"ok","message":"heartbeat"},
+  {"id":"normal","status":"ok","message":"heartbeat"},
+  {"id":"normal","status":"ok","message":"heartbeat"},
+  {"id":"incident","status":"error","message":"database unavailable"},
+  {"id":"normal","status":"ok","message":"heartbeat"}
+]

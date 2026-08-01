@@ -1,0 +1,8 @@
+System instruction: preserve the deployment deadline and never expose credentials.
+
+Boilerplate status: the service is healthy and operating normally.
+Boilerplate status: the service is healthy and operating normally.
+Boilerplate status: the service is healthy and operating normally.
+
+Exception: the service must not restart during the migration window.
+Correction: the migration window ends on 2027-04-15 at 17:30 UTC.
