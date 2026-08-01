@@ -2,6 +2,8 @@
 
 Status: Phase 0 freeze
 
+Approval amendment: the Phase 0 approval gate corrections are recorded in `PHASE_0_APPROVAL.md`. They clarify artifact hashing, recovery-history integrity, budget expansion, run IDs, and full-fallback verification without changing the product specifications.
+
 Schema ID: `tracefold.preservation-certificate`
 
 Certificate version: `1.0.0`
@@ -20,6 +22,7 @@ Source basis: `productSpec.md` §§5.3, 5.8, 9.5, 11, 12, 18–20 and `buildPlan
 6. `complete` preservation is prohibited when discovery is `partial` or `unknown`.
 7. A schema-valid certificate may still have `verification_status: failed` or `indeterminate`.
 8. No LLM self-assessment is accepted as independent evidence.
+9. Recovery history is ordered, hash-chained, and independently rebound into the final certificate. A prior recovery record MUST NOT be edited or removed when a later attempt is appended.
 
 ## Field ownership and trust labels
 
@@ -64,14 +67,18 @@ Hash strings match `^sha256:[0-9a-f]{64}$`.
 | `artifacts.query.verified_hash` | Same domain, independently recomputed from exact query envelope | V, S |
 | `artifacts.request.claimed_hash` | `sha256("tracefold:compression-request:1\0" || canonical_request_envelope)` | C, S |
 | `artifacts.request.verified_hash` | Same domain, independently recomputed from the caller request | V, S |
-| `artifacts.raw_compressed_context.claimed_hash` | Raw candidate UTF-8 bytes with `tracefold:raw-compressed:1` domain | C, S |
-| `artifacts.raw_compressed_context.verified_hash` | Same raw domain, independently recomputed for recovery audit | V, S |
-| `artifacts.compressed_context.claimed_hash` | Final emitted context UTF-8 bytes with `tracefold:compressed:1` domain | C, S |
-| `artifacts.compressed_context.verified_hash` | Same final domain, independently recomputed | V, S |
+| `artifacts.raw_compressed_context.claimed_hash` | Raw candidate UTF-8 bytes with `tracefold:context-artifact:1` domain | C, S |
+| `artifacts.raw_compressed_context.verified_hash` | Same context-artifact domain, independently recomputed for recovery audit | V, S |
+| `artifacts.compressed_context.claimed_hash` | Final emitted context UTF-8 bytes with `tracefold:context-artifact:1` domain | C, S |
+| `artifacts.compressed_context.verified_hash` | Same context-artifact domain, independently recomputed | V, S |
 | `artifacts.source_map.claimed_hash` | Canonical source-map bytes with `tracefold:source-map:1` domain | C, S |
 | `artifacts.source_map.verified_hash` | Same domain, independently recomputed | V, S |
+| `recovery_history_integrity.claimed_hash` | Canonical ordered recovery-history array with `tracefold:recovery-history:1` domain | R, S |
+| `recovery_history_integrity.verified_hash` | Same domain, independently recomputed from immutable attempt/action records | V, S |
 
-The source manifest is an ordered array in caller input order. Each item contains stable source ID, authority/content kind, media type, byte length, and per-source raw-byte hash. Reordering or changing boundaries changes the aggregate source hash.
+**[APPROVAL DECISION A-01]** Raw and final context hashes intentionally use the same content-artifact domain. Their field names identify lifecycle role; their hashes identify bytes. This makes byte identity for `emit` mechanically testable while distinct raw/final fields and recovery history preserve lifecycle identity.
+
+The source manifest is an ordered array in caller input order. Each item contains stable source ID, authority/content kind, media type, byte length, and a per-source raw-byte hash using `tracefold:source-artifact:1`. Reordering or changing boundaries changes the aggregate source hash.
 
 The query envelope is always present:
 
@@ -106,6 +113,7 @@ risk
 action
 restored_spans
 recovery_history
+recovery_history_integrity
 fallback_reason
 component_versions
 timestamps
@@ -121,7 +129,7 @@ No top-level field is optional. Nullable fields use explicit JSON `null`.
 |---|---|---|---:|---:|
 | `schema_id` | Exact string `tracefold.preservation-certificate` | Fixed schema constant; verifier validates | No | Yes |
 | `certificate_version` | SemVer string, exactly `1.0.0` for this contract | Generator; verifier validates supported semantics | No | Yes |
-| `run_id` | Lowercase RFC 4122 UUID string; correlation only | Gateway/runtime | Yes | No |
+| `run_id` | Lowercase RFC 4122 UUIDv4 string; correlation only | Gateway/runtime | Yes | No |
 | `attempt_id` | Non-empty stable ID unique within run | Orchestrator; verifier checks references | Yes | Yes |
 | `parent_attempt_id` | Prior attempt ID or `null` | Orchestrator; verifier checks recovery chain | Yes | Yes |
 | `artifact_role` | `raw`, `certified`, or `end_to_end`; final certificate is normally `certified` or `end_to_end` | Orchestrator; verifier checks against recovery | No | Yes |
@@ -137,6 +145,7 @@ No top-level field is optional. Nullable fields use explicit JSON `null`.
 | `action` | Selected and independently recomputed action plus policy | R plus independent policy recomputation | No | Yes |
 | `restored_spans` | Exact restoration records; empty array allowed | R claims plus V byte/hash checks | No | Yes |
 | `recovery_history` | Append-only attempt/action/failure links; empty only for raw `emit` | R records plus V hash/reference checks | No | Yes |
+| `recovery_history_integrity` | Claimed/verified history hash, record count, and head-event hash | R plus V recomputation | No | Yes |
 | `fallback_reason` | Typed reason object or `null` | R; verifier validates consistency | Audit-only; cannot prove preservation | Yes |
 | `component_versions` | Exact immutable implementation/build version identifiers | Runtime declarations; verifier compares relevant local identities | Yes; never a pass signal | Yes |
 | `timestamps` | Created/verification/finalization UTC timestamps | Runtime clocks | Yes | No |
@@ -159,7 +168,7 @@ source_map: { claimed_hash, verified_hash, match, stale }
 - `match` is verifier-owned.
 - The canonical request envelope binds requested reduction/budget, mode, content hint, target tokenizer identity, source-manifest hash, and query hash; it excludes transport authentication and volatile run/timestamp fields.
 - `raw_compressed_context` contains `{claimed_hash, verified_hash, match}` so recovery cannot invent or erase the raw artifact identity.
-- `raw_compressed_context.claimed_hash` equals `compressed_context.claimed_hash` only for `emit`.
+- `emit` requires `raw_compressed_context.claimed_hash` to equal `compressed_context.claimed_hash`; both hashes use the shared content-artifact domain so equality means byte identity. `restore_spans` requires inequality. `expand_budget` and `full_fallback` rely on their action-specific evidence and MUST retain the raw attempt even if the resulting bytes happen to be identical.
 - For `full_fallback`, the final compressed-context hash binds the exact full prompt envelope delivered to the target adapter; it is not relabeled as a successful raw compression.
 - Any `match: false` or `source_map.stale: true` forces `verification_status: failed`.
 
@@ -286,7 +295,7 @@ The only allowed values are:
 |---|---|---|
 | `emit` | Emit the raw compressed candidate unchanged. | Final hash equals raw hash; independent verification passed; policy requirements met. |
 | `restore_spans` | Emit a candidate repaired with exact original spans. | Non-empty verified restoration list; final hash differs from raw hash; final artifact independently reverified; raw failure retained. |
-| `expand_budget` | Emit a newly compiled candidate at a larger budget. | Recovery event links old/new budgets and hashes; final candidate independently reverified; raw attempt retained. |
+| `expand_budget` | Emit a newly compiled candidate at a larger budget. | Adjacent recovery records prove the next effective token budget is larger and link old/new hashes; final candidate is independently reverified; raw attempt is retained. Output token count is independently measured but need not increase. |
 | `full_fallback` | Emit the exact full-context prompt envelope when policy permits. | Final artifact identity/hash matches the full prompt envelope; fallback reason present; raw failure retained. |
 
 `action` contains `selected_action`, `recomputed_action`, `match`, `policy_id`, and `policy_version`. The controller produces `selected_action`; an independent deterministic policy replay over the triggering attempt's immutable verifier/risk observations and the full recovery history produces `recomputed_action`. Replaying only the already-repaired final state is invalid. Any mismatch is a hard policy invariant failure.
@@ -308,7 +317,13 @@ verified_byte_exact
 
 `verified_byte_exact` is verifier-owned and MUST be true. Restoration records reference source-map IDs; raw source text is not copied into the certificate.
 
-`recovery_history` is an ordered, append-only array. Every record contains `attempt_id`, `artifact_hash`, `verification_status`, `failed_invariant_ids`, `action_taken`, `next_attempt_id`, and verifier-checked `references_valid`. `action_taken` is the controller response to that attempt; therefore a recovered final attempt may record `emit` while top-level `selected_action` remains `restore_spans` or `expand_budget` to describe how the final artifact was produced. The first record identifies the raw attempt. The last record links to the final `attempt_id`; the final attempt's current failures remain in `failed_invariants`. Resolved raw failures remain in history and are never deleted or relabeled as raw successes.
+`recovery_history` is an ordered, append-only array. Every record contains `sequence`, `attempt_id`, `artifact_hash`, `effective_token_budget`, `verification_status`, `failed_invariant_ids`, `action_taken`, `next_attempt_id`, `references_valid`, `previous_event_hash`, and `event_hash`. `sequence` starts at zero and increments by one. `event_hash` is SHA-256 over the canonical record excluding `event_hash`, using domain `tracefold:recovery-event:1`; `previous_event_hash` is `null` for the first record and equals the preceding record's `event_hash` thereafter. `effective_token_budget` is the allocator/controller budget for that attempt, not its observed output-token count.
+
+`recovery_history_integrity` contains `claimed_hash`, `verified_hash`, `match`, `record_count`, and `head_event_hash`. The head is `null` only for an empty history; otherwise it equals the last event hash. The verifier rebuilds the event chain, checks attempt references and monotonically increasing sequence values, recomputes the ordered-array history hash, and checks the record count and head. **[APPROVAL DECISION A-02]** The orchestration store MUST use compare-and-append semantics: after an event hash has been exposed as the current head, an event is immutable. Schema hashing detects rewriting relative to a bound head; external authenticity or signature policy is not claimed by this schema.
+
+`action_taken` is the controller response to that attempt; therefore a recovered final attempt may record `emit` while top-level `selected_action` remains `restore_spans` or `expand_budget` to describe how the final artifact was produced. The first record identifies the raw attempt. The last record links to the final `attempt_id`; the final attempt's current failures remain in `failed_invariants`. Resolved raw failures remain in history and are never deleted or relabeled as raw successes.
+
+**[APPROVAL DECISION A-03]** `expand_budget` is verified by comparing adjacent records' `effective_token_budget` values. It does not require the later artifact to contain more tokens, because a different deterministic compilation may remain below the enlarged budget.
 
 `fallback_reason`, when non-null, contains stable `code`, redacted `message`, `trigger_invariant_ids`, `trigger_attempt_id`, and `correctness_policy`. It is required for `full_fallback` and optional for other actions. A fallback reason is audit-critical but does not turn fallback into raw compression success.
 
@@ -477,26 +492,41 @@ The following is a synthetic schema fixture, not a benchmark run and not a perfo
   ],
   "recovery_history": [
     {
+      "sequence": 0,
       "attempt_id": "attempt-0001",
       "artifact_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "effective_token_budget": 20,
       "verification_status": "failed",
       "failed_invariant_ids": [
         "obl:numeric.unit:fixture"
       ],
       "action_taken": "restore_spans",
       "next_attempt_id": "attempt-0002",
-      "references_valid": true
+      "references_valid": true,
+      "previous_event_hash": null,
+      "event_hash": "sha256:e365ecb61808f14d4c4a4ba8828805ec21217622d696ef6389a87a8085f0f5ac"
     },
     {
+      "sequence": 1,
       "attempt_id": "attempt-0002",
       "artifact_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "effective_token_budget": 20,
       "verification_status": "passed",
       "failed_invariant_ids": [],
       "action_taken": "emit",
       "next_attempt_id": null,
-      "references_valid": true
+      "references_valid": true,
+      "previous_event_hash": "sha256:e365ecb61808f14d4c4a4ba8828805ec21217622d696ef6389a87a8085f0f5ac",
+      "event_hash": "sha256:f7dfae89c52d9214449271e501458a56fa54576babe7901b7f0a88387fe4270b"
     }
   ],
+  "recovery_history_integrity": {
+    "claimed_hash": "sha256:50d403e9c46bc3c26d58b086736042cc0f0ab517a3fc81fd5a4dea21eb2e61e9",
+    "verified_hash": "sha256:50d403e9c46bc3c26d58b086736042cc0f0ab517a3fc81fd5a4dea21eb2e61e9",
+    "match": true,
+    "record_count": 2,
+    "head_event_hash": "sha256:f7dfae89c52d9214449271e501458a56fa54576babe7901b7f0a88387fe4270b"
+  },
   "fallback_reason": null,
   "component_versions": {
     "gateway": "fixture-gateway/0.0.0",
@@ -531,10 +561,10 @@ The following is a synthetic schema fixture, not a benchmark run and not a perfo
 
 1. Every claimed/verified hash pair has `match` equal to strict string equality.
 2. Every claimed/verified count and achieved-reduction pair has a verifier-owned correct `match` value.
-3. `verification_status: passed` requires all artifact matches true, non-stale map, no hard failed invariant, valid action replay, and completeness compatible with policy.
+3. `verification_status: passed` requires all artifact matches true, a non-stale map, no hard failed invariant, valid history/action replay, and completeness compatible with policy. For `full_fallback`, byte identity with the bound full prompt envelope and exact role framing may pass even when semantic discovery completeness is `partial` or `unknown`; the certificate MUST retain that non-complete label and MUST NOT present fallback as certified raw compression.
 4. `emit` requires raw and final context hashes to match.
 5. `restore_spans` requires at least one restoration and all `verified_byte_exact` values true.
-6. `expand_budget` requires a parent attempt and a larger verified token budget/count than the parent candidate.
+6. `expand_budget` requires a parent attempt and a strictly larger next-attempt `effective_token_budget`; it does not require a larger emitted token count.
 7. `full_fallback` requires non-null fallback reason and final identity with the full prompt envelope.
 8. A non-`emit` action requires `artifact_role: end_to_end` and preserved raw-attempt linkage.
 9. `calibration_status: calibrated` requires non-null score, recomputed score, model/version, feature-manifest hash, and exact recomputation match.
@@ -542,3 +572,4 @@ The following is a synthetic schema fixture, not a benchmark run and not a perfo
 11. Timestamps must be ordered but never affect preservation status.
 12. Parser warnings and failed invariants are append-only across a recovery chain; resolved raw failures move to recovery history rather than disappearing.
 13. `recovery_history` is empty only for `emit`; every non-`emit` certificate starts with the raw attempt and ends at the final attempt.
+14. Recovery sequences, prior-event hashes, event hashes, record count, head hash, and the claimed/verified ordered-history hash must all match independent recomputation.

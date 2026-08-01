@@ -2,6 +2,8 @@
 
 Status: Phase 0 freeze
 
+Approval amendment: the Phase 0 approval gate corrections are recorded in `PHASE_0_APPROVAL.md`. They clarify artifact hash domains and canonical invariant identifiers without changing the product specifications.
+
 Schema ID: `tracefold.source-map`
 
 Source-map version: `1.0.0`
@@ -135,7 +137,17 @@ message_id
 role
 ```
 
-Fields that do not apply are explicit `null`. `hash` uses the stage-specific domain defined by `certificate-schema.md`. Artifact order is original input order followed by deterministic stage/attempt order.
+Fields that do not apply are explicit `null`. **[APPROVAL DECISION A-04]** Artifact hashes use this complete domain registry:
+
+| Artifact stage | Hash domain and byte input |
+|---|---|
+| `original` | `sha256("tracefold:source-artifact:1\0" || exact original bytes)` |
+| `normalized` | `sha256("tracefold:normalized-artifact:1\0" || exact normalized UTF-8 bytes)` |
+| `raw_compressed` | `sha256("tracefold:context-artifact:1\0" || exact raw candidate UTF-8 bytes)` |
+| `restored` | `sha256("tracefold:context-artifact:1\0" || exact restored-candidate UTF-8 bytes)` |
+| `final_compressed` | `sha256("tracefold:context-artifact:1\0" || exact final emitted UTF-8 bytes)` |
+
+Raw, restored, and final lifecycle roles share one content-artifact domain so equal hashes mean equal bytes. Field/stage identity and recovery history retain lifecycle distinctions. Artifact order is original input order followed by deterministic stage/attempt order.
 
 For a multi-source normalized composite, a separate normalized artifact may reference an ordered `composed_from_source_ids` list. Boundaries are synthesized mappings; concatenation without boundary records is forbidden.
 
@@ -327,8 +339,8 @@ CRLF is normalized to LF; the protected value-unit span stays byte-exact.
     {"span_id": "span:doc:compressed:value-unit", "artifact_id": "artifact:final_compressed:attempt-1", "kind": "text", "byte_start": 7, "byte_end": 12, "char_start": 7, "char_end": 12, "line_start": 1, "column_start": 8, "line_end": 1, "column_end": 13}
   ],
   "mappings": [
-    {"mapping_id": "map:doc:normalize", "transform": "exact_copy", "from_span_ids": ["span:doc:original:value-unit"], "to_span_ids": ["span:doc:normalized:value-unit"], "exactness": "byte_exact", "ordering": "preserved", "obligation_ids": ["obl:numeric.number:fixture", "obl:numeric.unit:fixture"]},
-    {"mapping_id": "map:doc:compress", "transform": "exact_copy", "from_span_ids": ["span:doc:normalized:value-unit"], "to_span_ids": ["span:doc:compressed:value-unit"], "exactness": "byte_exact", "ordering": "preserved", "obligation_ids": ["obl:numeric.number:fixture", "obl:numeric.unit:fixture"]}
+    {"mapping_id": "map:doc:normalize", "transform": "exact_copy", "from_span_ids": ["span:doc:original:value-unit"], "to_span_ids": ["span:doc:normalized:value-unit"], "exactness": "byte_exact", "ordering": "preserved", "obligation_ids": ["obl:numeric.number:fixture", "obl:numeric.unit:fixture"], "relation_ids": ["rel:relation.value_unit_owner:fixture"]},
+    {"mapping_id": "map:doc:compress", "transform": "exact_copy", "from_span_ids": ["span:doc:normalized:value-unit"], "to_span_ids": ["span:doc:compressed:value-unit"], "exactness": "byte_exact", "ordering": "preserved", "obligation_ids": ["obl:numeric.number:fixture", "obl:numeric.unit:fixture"], "relation_ids": ["rel:relation.value_unit_owner:fixture"]}
   ]
 }
 ```
@@ -348,7 +360,7 @@ Byte coordinates and RFC 6901 path identify the exact protected value.
     {"span_id": "span:json:compressed:value", "artifact_id": "artifact:final_compressed:attempt-1", "kind": "json_value", "byte_start": 19, "byte_end": 21, "char_start": 19, "char_end": 21, "line_start": 1, "column_start": 20, "line_end": 1, "column_end": 22, "json_path": "/value", "structured_identity": {"key_path": "/id", "key_value": "r1"}}
   ],
   "mappings": [
-    {"mapping_id": "map:json:value", "transform": "exact_copy", "from_span_ids": ["span:json:original:value"], "to_span_ids": ["span:json:compressed:value"], "exactness": "byte_exact", "ordering": "preserved", "obligation_ids": ["obl:numeric.number:fixture"], "relation_ids": ["relation:json-path-value:fixture"]}
+    {"mapping_id": "map:json:value", "transform": "exact_copy", "from_span_ids": ["span:json:original:value"], "to_span_ids": ["span:json:compressed:value"], "exactness": "byte_exact", "ordering": "preserved", "obligation_ids": ["obl:numeric.number:fixture", "obl:structured.json_schema_path:fixture"], "relation_ids": []}
   ]
 }
 ```
@@ -370,7 +382,7 @@ Event, severity, timestamp, and trace identity remain connected.
     {"span_id": "span:log:compressed-event", "artifact_id": "artifact:final_compressed:attempt-1", "kind": "log_event", "byte_start": 0, "byte_end": 42, "char_start": 0, "char_end": 42, "line_start": 1, "column_start": 1, "line_end": 1, "column_end": 43, "log_event_id": "log:src:0:fixture-log:0:fixture"}
   ],
   "mappings": [
-    {"mapping_id": "map:log:event", "transform": "exact_copy", "from_span_ids": ["span:log:event"], "to_span_ids": ["span:log:compressed-event"], "exactness": "byte_exact", "ordering": "preserved", "obligation_ids": ["obl:temporal.timestamp:fixture", "obl:identifier.trace-request:fixture"], "relation_ids": ["rel:event-timestamp:fixture", "rel:event-trace:fixture"]}
+    {"mapping_id": "map:log:event", "transform": "exact_copy", "from_span_ids": ["span:log:event"], "to_span_ids": ["span:log:compressed-event"], "exactness": "byte_exact", "ordering": "preserved", "obligation_ids": ["obl:temporal.timestamp:fixture", "obl:identifier.trace_request:fixture"], "relation_ids": ["rel:relation.event_timestamp:fixture", "rel:relation.event_trace:fixture"]}
   ]
 }
 ```
@@ -416,8 +428,8 @@ The superseded value is deleted with provenance; the corrected value maps exactl
     {"span_id": "span:dialogue:compressed:value", "artifact_id": "artifact:final_compressed:attempt-1", "kind": "dialogue_turn", "byte_start": 26, "byte_end": 30, "char_start": 26, "char_end": 30, "line_start": 1, "column_start": 27, "line_end": 1, "column_end": 31, "conversation_message_id": "m2", "role": "user"}
   ],
   "mappings": [
-    {"mapping_id": "map:dialogue:old-delete", "transform": "delete", "from_span_ids": ["span:dialogue:m1:value"], "to_span_ids": [], "exactness": "none_deleted", "ordering": "not_applicable", "obligation_ids": [], "relation_ids": ["rel:statement-correction:fixture"], "metadata": {"reason_code": "superseded_value"}},
-    {"mapping_id": "map:dialogue:new-copy", "transform": "exact_copy", "from_span_ids": ["span:dialogue:m2:value"], "to_span_ids": ["span:dialogue:compressed:value"], "exactness": "byte_exact", "ordering": "preserved", "obligation_ids": ["obl:numeric.number:fixture"], "relation_ids": ["rel:statement-correction:fixture"]}
+    {"mapping_id": "map:dialogue:old-delete", "transform": "delete", "from_span_ids": ["span:dialogue:m1:value"], "to_span_ids": [], "exactness": "none_deleted", "ordering": "not_applicable", "obligation_ids": [], "relation_ids": ["rel:relation.statement_correction:fixture"], "metadata": {"reason_code": "superseded_value"}},
+    {"mapping_id": "map:dialogue:new-copy", "transform": "exact_copy", "from_span_ids": ["span:dialogue:m2:value"], "to_span_ids": ["span:dialogue:compressed:value"], "exactness": "byte_exact", "ordering": "preserved", "obligation_ids": ["obl:numeric.number:fixture", "obl:temporal.correction:fixture"], "relation_ids": ["rel:relation.statement_correction:fixture"]}
   ]
 }
 ```

@@ -2,6 +2,8 @@
 
 Status: proposed next-phase contract; implementation not started
 
+Approval amendment: the Phase 0 approval gate decisions are recorded in `../PHASE_0_APPROVAL.md`. The amendments below freeze the Phase 1 interpreter/toolchain, canonicalization dependency, hash-domain registry, public JSON Schema export locations, and CI commands. Phase 1 remains unimplemented.
+
 Phase contract version: `phase-1/1.0`
 
 Source basis: the explicit Phase 1 scope in the Phase 0 task, `productSpec.md` §§11–14, and `buildPlan.md` §§4, 6.1, 9.1, 10, and 18. **[PROPOSED PROJECT DECISION]** The exact allowlist, package dependencies, interface signatures, route/CLI behavior, schema partition, and exit commands below are proposed project decisions; none is implemented in Phase 0.
@@ -64,6 +66,8 @@ tests/fixtures/canonical/query-text.json
 tests/fixtures/canonical/source-manifest.json
 tests/fixtures/canonical/certificate-synthetic.json
 tests/fixtures/canonical/source-map-synthetic.json
+schemas/v1/preservation-certificate.schema.json
+schemas/v1/source-map.schema.json
 ```
 
 Directories implied by those files may be created. Generated `*.egg-info`, cache, build, and coverage files are ignored artifacts, not phase outputs.
@@ -79,14 +83,15 @@ No `apps/`, `benchmarks/`, `configs/`, `reports/`, frontend, model, analyzer, co
 
 ## Package and dependency contract
 
-- Python requirement: `>=3.11`.
+- **[APPROVAL DECISION A-05]** Phase 1 supports CPython `3.11.x` exactly. `pyproject.toml` uses `requires-python = ">=3.11,<3.12"`, and every repository command uses `python3.11`.
 - `src/` layout with import root `tracefold`.
-- Runtime dependencies are limited to Pydantic v2, FastAPI, and Typer plus their transitive dependencies.
-- Test dependencies are limited to pytest, HTTPX/TestClient support, and a formatting/lint tool only if its command is added to the exit gate in the same phase review.
+- **[APPROVAL DECISION A-06]** Dependency management uses a PEP 621 `pyproject.toml`, Hatchling `>=1.27,<2` as the PEP 517 build backend, `pip` for installation, and a `[project.optional-dependencies].dev` extra. Phase 1 does not introduce a lockfile; resolved versions are captured by CI/runtime metadata.
+- Runtime dependencies are limited to Pydantic `>=2,<3`, FastAPI `>=0.115,<1`, Typer `>=0.16,<1`, and `rfc8785>=0.1,<1`, plus their transitive dependencies.
+- Development dependencies are limited to pytest `>=8,<9`, HTTPX `>=0.27,<1`, Ruff `>=0.12,<1`, and mypy `>=1.17,<2`, plus required typing stubs.
 - No ML, tokenizer-model, parser, database, benchmark, frontend, or hosted-API dependency is allowed.
 - **[PROPOSED PROJECT DECISION]** `tracefold.__version__` starts at `0.1.0`; schema versions remain independently `1.0.0`.
 
-Dependency ranges in `pyproject.toml` MUST constrain supported major versions. Exact resolved versions are recorded by CI/runtime metadata; introducing a lockfile is deferred because it is not in the file allowlist.
+Dependency ranges in `pyproject.toml` MUST constrain supported major versions. Tool configuration for pytest, Ruff, and strict mypy lives in `pyproject.toml`; no separate configuration file is allowed.
 
 ## Public interfaces
 
@@ -102,7 +107,7 @@ def parse_json_strict(data: bytes | str) -> object: ...
 
 Rules:
 
-- Implements the project RFC 8785 profile from `certificate-schema.md`.
+- Implements the project RFC 8785 profile from `certificate-schema.md` through the pinned-major `rfc8785` dependency; a hand-rolled approximation is not accepted.
 - Rejects duplicate keys, invalid Unicode, NaN, infinities, and unsupported object types.
 - Produces UTF-8 with no BOM and no trailing newline.
 - Pydantic models serialize through their JSON-compatible representation with explicit `null` fields retained where required by schema.
@@ -110,8 +115,8 @@ Rules:
 ### Hashing
 
 ```python
-def sha256_domain(domain: str, payload: bytes) -> str: ...
-def hash_canonical(domain: str, value: object) -> str: ...
+def sha256_domain(domain: HashDomain, payload: bytes) -> str: ...
+def hash_canonical(domain: HashDomain, value: object) -> str: ...
 def hash_query(query: QueryEnvelope) -> str: ...
 def hash_source_manifest(manifest: SourceManifest) -> str: ...
 ```
@@ -122,6 +127,8 @@ Rules:
 - Domain input is ASCII and implementation adds the required NUL separator exactly once.
 - Query null and query empty string MUST hash differently.
 - Hash utilities perform no I/O and never normalize payload bytes implicitly.
+
+**[APPROVAL DECISION A-07]** `HashDomain` is a closed Phase 1 string enum. Its values are the exact domain prefixes frozen by the Phase 0 schemas: certificate `tracefold:certificate:1.0.0`, source manifest `tracefold:source-manifest:1`, query `tracefold:query:1`, compression request `tracefold:compression-request:1`, source artifact `tracefold:source-artifact:1`, normalized artifact `tracefold:normalized-artifact:1`, context artifact `tracefold:context-artifact:1`, source map `tracefold:source-map:1`, span `tracefold:span:1`, recovery event `tracefold:recovery-event:1`, and recovery history `tracefold:recovery-history:1`. Callers pass the domain without a trailing NUL. Raw, restored, and final contexts intentionally use the same context-artifact domain so hash equality means byte equality.
 
 ### Run IDs
 
@@ -136,7 +143,10 @@ def validate_run_id(value: str) -> str: ...
 
 ```python
 def configure_logging(*, level: str = "INFO") -> None: ...
-def bind_run_context(run_id: str, attempt_id: str | None = None): ...
+def bind_run_context(
+    run_id: str,
+    attempt_id: str | None = None,
+) -> AbstractContextManager[None]: ...
 ```
 
 Logs are structured, include run/attempt IDs when bound, and never include source/query/context/certificate payloads by default. Secret values are never logged. Logging has no import-time global configuration side effect.
@@ -165,7 +175,7 @@ Rules:
 
 ### CLI shell
 
-The executable name is `tracefold`; `python -m tracefold` is equivalent.
+The executable name is `tracefold`; `python3.11 -m tracefold` is equivalent.
 
 Allowed commands:
 
@@ -201,6 +211,17 @@ Allowed routes:
 
 No target-model, compare, retrieve, explain, or certificate-verification route is implemented in Phase 1.
 
+### Public JSON Schema publication
+
+**[APPROVAL DECISION A-08]** Phase 1 publishes the two versioned public schemas at these repository paths:
+
+```text
+schemas/v1/preservation-certificate.schema.json
+schemas/v1/source-map.schema.json
+```
+
+Their immutable schema IDs are `urn:tracefold:schema:preservation-certificate:1.0.0` and `urn:tracefold:schema:source-map:1.0.0`. The Pydantic models are the implementation source, the committed JSON Schema exports are the public interoperability artifacts, and `tracefold schema ... --check` MUST regenerate each schema in memory, canonicalize it, and compare it byte-for-byte with the committed export. The command never rewrites an export. An external HTTPS mirror may be added later, but it MUST serve these bytes and MUST NOT change either schema ID or repository location for version `1.0.0`.
+
 ## Schemas
 
 All models are Pydantic v2 models with `extra="forbid"`, strict field validation, deterministic serialization, and explicit enums.
@@ -208,6 +229,7 @@ All models are Pydantic v2 models with `extra="forbid"`, strict field validation
 ### Common schemas
 
 - `HashValue`: validated `sha256:<64 lowercase hex>` string type.
+- `HashDomain`: closed enum of the exact versioned domain prefixes listed in the hashing contract.
 - `SemVer`: validated semantic-version string type used for schema/component versions.
 - `ArtifactStage`: `original`, `normalized`, `raw_compressed`, `restored`, `final_compressed`.
 - `VerificationStatus`: `passed`, `failed`, `indeterminate`.
@@ -234,7 +256,7 @@ Manifest/certificate schemas represent bytes by hash/length/reference. API input
 
 ### Certificate schemas
 
-- `HashClaimObservation`, `CountClaimObservation`, `ReductionRecord`, `ObligationClassResult`, `RelationClassResult`, `CoverageRecord`, `RiskRecord`, `ActionRecord`, `RestoredSpan`, `ComponentVersions`, `CertificateTimestamps`, `PreservationCertificate`.
+- `HashClaimObservation`, `CountClaimObservation`, `ReductionRecord`, `ObligationClassResult`, `RelationClassResult`, `CoverageRecord`, `RiskRecord`, `ActionRecord`, `RestoredSpan`, `RecoveryEvent`, `RecoveryHistoryIntegrity`, `ComponentVersions`, `CertificateTimestamps`, `PreservationCertificate`.
 - Fields and enums exactly reflect `certificate-schema.md`.
 - Cross-field validators implement schema-local constraints (required restoration list/action relationship, completeness/discovery compatibility, nullable risk fields) but do not claim independent verification.
 - `PreservationCertificate` acceptance by Pydantic means “schema valid,” not “preservation verified.”
@@ -277,13 +299,15 @@ Fixtures are synthetic schema/serialization inputs, not benchmark cases and not 
 - `certificate-synthetic.json`: schema-complete certificate copied from/adapted to the Phase 0 example and labeled synthetic.
 - `source-map-synthetic.json`: small original/normalized/compressed map with CRLF and multibyte Unicode coordinates.
 
+The two committed files under `schemas/v1/` are canonical public JSON Schema exports, not test fixtures. Their generated content must be byte-identical to the Pydantic model exports after canonical serialization.
+
 Fixtures contain no credentials, private data, model outputs, benchmark scores, or generated benchmark results.
 
 ## Acceptance tests
 
 ### Packaging and imports
 
-- Editable install succeeds on Python 3.11+.
+- Editable install succeeds under CPython 3.11.x and is rejected by package metadata outside `>=3.11,<3.12`.
 - `import tracefold` has no network, logging, file-write, model-load, or environment-read side effects.
 - All public modules import in a clean process.
 
@@ -299,6 +323,7 @@ Fixtures contain no credentials, private data, model outputs, benchmark scores, 
 
 - Hash outputs match committed golden values for canonical fixtures.
 - Domain changes alter hashes for identical payloads.
+- Raw and final context bytes hash equally under the shared context-artifact domain; a byte change makes the hashes differ.
 - Null query and empty-string query hashes differ.
 - Source manifest reorder/boundary/role change alters aggregate hash.
 - Raw bytes are hashed without normalization.
@@ -311,6 +336,7 @@ Fixtures contain no credentials, private data, model outputs, benchmark scores, 
 - `complete` with `unknown` discovery fails.
 - `restore_spans` with an empty restoration list fails.
 - `emit` with different raw/final hashes fails schema-local validation.
+- Recovery event sequences, previous-event links, event hashes, record count, head hash, and history claimed/verified hash pairs validate as one append-only chain; any mutation fails.
 - Schema validation alone never changes `verification_status` to `passed`.
 
 ### Source maps
@@ -347,6 +373,12 @@ Fixtures contain no credentials, private data, model outputs, benchmark scores, 
 - Invalid compression requests return `422` without echoing source payloads.
 - No route performs compression, model calls, or verification.
 
+### Static quality gates
+
+- `python3.11 -m ruff check .` passes with configuration in `pyproject.toml`.
+- `python3.11 -m mypy src tests` passes in strict mode with configuration in `pyproject.toml`.
+- Ruff is the Phase 1 lint command. Mypy is the Phase 1 type-check command. No second formatter, linter, or type checker is introduced.
+
 ## Non-goals
 
 Phase 1 MUST NOT include:
@@ -363,22 +395,25 @@ Phase 1 MUST NOT include:
 - restoration, source store, budget expansion, or fallback execution;
 - benchmark datasets, adapters, integrations, runs, scores, or reports;
 - frontend/demo implementation;
+- TypeScript, JavaScript, Node.js, and frontend tooling;
 - production deployment or persistence;
 - unsupported performance numbers or claims.
 
 ## Exact exit commands
 
-Run from the repository root in a clean Python 3.11+ environment:
+Run from the repository root with CPython 3.11.x:
 
 ```bash
-python -m pip install -e '.[dev]'
-python -m pytest -q
-python -m compileall -q src tests
-python -m tracefold --help
-python -m tracefold version
-python -m tracefold schema certificate --check
-python -m tracefold schema source-map --check
-python -c "from tracefold.api import app; assert app.title == 'TraceFold'"
+python3.11 -m pip install -e '.[dev]'
+python3.11 -m pytest -q
+python3.11 -m ruff check .
+python3.11 -m mypy src tests
+python3.11 -m compileall -q src tests
+python3.11 -m tracefold --help
+python3.11 -m tracefold version
+python3.11 -m tracefold schema certificate --check
+python3.11 -m tracefold schema source-map --check
+python3.11 -c "from tracefold.api import app; assert app.title == 'TraceFold'"
 git diff --check
 git status --short
 ```

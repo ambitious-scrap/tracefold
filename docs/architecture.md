@@ -78,10 +78,11 @@ The reporting layer and demo UI are read-only consumers of immutable run artifac
 ## Shared artifact rules
 
 - Artifact exchange uses versioned Pydantic/domain schemas and canonical JSON where serialized.
-- Original bytes, normalized bytes, raw compressed bytes, and final emitted bytes have distinct identifiers and hashes.
+- Original bytes, normalized bytes, raw compressed bytes, and final emitted bytes have distinct lifecycle identifiers. Original and normalized artifacts use distinct hash domains; raw, restored, and final contexts use the shared `tracefold:context-artifact:1` domain so equal hashes prove equal bytes while identifiers preserve lifecycle role. **[APPROVAL DECISION A-01]**
 - Run IDs correlate artifacts but are not content identity.
 - All lists whose order affects hashes define an explicit order.
 - Failure objects contain stable machine codes and human-readable messages without secret contents.
+- Recovery records are compare-and-append, sequence-checked, event-hash-chained, and rebound by a verifier-recomputed history hash; resolved raw failures remain immutable history. **[APPROVAL DECISION A-02]**
 - **[PROPOSED PROJECT DECISION]** A module returns either a typed success artifact or a typed failure; `None`, partial dicts, and silent best-effort success are forbidden at trust boundaries.
 
 ## Module contracts

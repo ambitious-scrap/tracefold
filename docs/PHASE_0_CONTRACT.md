@@ -292,6 +292,8 @@ No issue in this section is silently resolved. Proposed resolutions are explicit
 
 These choices are intentionally not guessed in Phase 0. They do not block Phase 1 scaffolding unless stated otherwise.
 
+Approval-gate status: `PHASE_0_APPROVAL.md` classifies every item below. That approval record resolves the Phase 1 TypeScript boundary and repository publication location for public JSON Schemas, and assigns an owner/latest decision point to every remaining deferral. This historical list is retained so the frozen contract is not silently rewritten.
+
 1. Which exact target tokenizer identities and revisions will be used for the final demo and benchmark configurations?
 2. Which safe/balanced/aggressive risk thresholds will be selected after calibration evidence exists?
 3. Will logistic regression or isotonic regression be used for the first genuinely calibrated risk model?
