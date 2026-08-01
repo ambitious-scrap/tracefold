@@ -1,0 +1,7 @@
+2026-08-01T00:00:00Z INFO service=api event_id=heartbeat
+2026-08-01T00:00:01Z INFO service=api event_id=heartbeat
+2026-08-01T00:00:02Z INFO service=api event_id=heartbeat
+2026-08-01T00:00:03Z INFO service=api event_id=heartbeat
+2026-08-01T00:00:04Z WARN service=api event_id=slow
+2026-08-01T00:00:05Z ERROR service=api trace=t-1 event_id=e-2 caused_by=heartbeat error_code=E42 BoomError
+2026-08-01T00:00:06Z ERROR service=worker trace=t-2 event_id=e-3 error_code=E99

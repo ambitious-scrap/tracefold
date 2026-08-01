@@ -1,0 +1,5 @@
+system: Preserve role boundaries.
+user: Set the timeout to 15 ms.
+assistant: I will use 15 ms.
+user: Actually, use 20 ms instead.
+user: Return JSON only.

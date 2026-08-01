@@ -1,0 +1,8 @@
+System: return JSON only.
+Boilerplate: health checks use the standard response envelope.
+Boilerplate: health checks use the standard response envelope.
+Boilerplate: health checks use the standard response envelope.
+The API may serve cached data if the cache is warm.
+The API must not expose the authorization header.
+If the primary region fails, use the secondary region, except during maintenance.
+Correction: use 20 ms instead of 15 ms for the API timeout.
