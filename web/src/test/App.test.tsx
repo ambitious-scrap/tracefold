@@ -33,7 +33,7 @@ describe("application routes and primary controls", () => {
     fireEvent.click(screen.getByRole("button", { name: /Recovery/ }));
     expect(await screen.findByRole("heading", { name: "No recovery was needed" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Benchmarks/ }));
-    expect(await screen.findByRole("heading", { name: "Prepared artifacts. No accuracy score yet." })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Retained 45 of 46 answers the full context answered correctly" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Architecture/ }));
     expect(await screen.findByRole("region", { name: "TraceFold pipeline" })).toBeInTheDocument();
   });
@@ -61,7 +61,7 @@ describe("application routes and primary controls", () => {
     render(<App />);
     await screen.findByRole("heading", { name: "Compress context. Verify what remains." });
     fireEvent.click(screen.getByRole("button", { name: /Compress & verify/ }));
-    await waitFor(() => expect(screen.getByText(/Static demo/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Demo fallback/)).toBeInTheDocument());
   });
 
   it("shows a useful non-blank error state when demo data is unavailable", async () => {

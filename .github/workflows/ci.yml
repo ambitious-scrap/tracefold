@@ -21,10 +21,10 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
       - run: pytest -q
-      - run: ruff check src tests
-      - run: ruff format --check src tests
+      - run: ruff check src tests tools
+      - run: ruff format --check src tests tools
       - run: mypy src tests
-      - run: python -m compileall -q src
+      - run: python -m compileall -q src tools
       - run: python -m build
       - run: python -m tracefold --help
       - run: python -m tracefold compress --help
@@ -58,6 +58,12 @@ jobs:
           response = TestClient(app).post("/v1/compress", json=payload)
           assert response.status_code == 200, response.text
           PY
+      - name: Deterministic UI export
+        run: |
+          python tools/export_ui_demo_data.py
+          cp web/public/demo-data/index.json /tmp/tracefold-ui-a.json
+          python tools/export_ui_demo_data.py
+          cmp /tmp/tracefold-ui-a.json web/public/demo-data/index.json
       - name: Wheel installation smoke
         run: |
           python -m venv /tmp/tracefold-wheel
@@ -69,3 +75,21 @@ jobs:
           /tmp/tracefold-wheel/bin/tracefold schema certificate --check
           /tmp/tracefold-wheel/bin/tracefold schema source-map --check
           printf 'Boilerplate. Boilerplate. timeout = 30 seconds.' | /tmp/tracefold-wheel/bin/tracefold compress - --kind document --tokenizer-backend fixture-only --tokenizer-encoding utf8-byte
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build

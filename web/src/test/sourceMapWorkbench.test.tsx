@@ -25,7 +25,7 @@ describe("source-map workbench", () => {
   it("labels synthesized markers without implying exact source lineage", () => {
     const synthesized = { ...fragment, id: "fragment:test:marker", text: "[omitted: review evidence]", sourceSpanIds: [], sourceIds: [], outputKind: "synthesized_marker" as const, exactness: "semantic_lineage_only" as const, obligationIds: [], relationIds: [], sourceLabels: [] };
     render(<SourceMapWorkbench source={source} compactContext={synthesized.text} fragments={[synthesized]} sourceSpans={[sourceSpan]} />);
-    expect(screen.getByText(/Verified source mapping is unavailable/)).toBeInTheDocument();
+    expect(screen.getByText(/Detailed lineage unavailable/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /synthesized marker/ })).toBeInTheDocument();
     expect(screen.getByText("synthesized marker")).toBeInTheDocument();
     expect(screen.getByText("not declared")).toBeInTheDocument();

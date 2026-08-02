@@ -90,6 +90,21 @@ export interface SourceMapSummary {
   note: string;
 }
 
+export interface RuntimeSourceMapSummary {
+  mapId: string | null;
+  artifactCount: number;
+  spanCount: number;
+  mappingCount: number;
+  omissionCount: number;
+}
+
+export interface RuntimeRecoverySummary {
+  finalStatus: string | null;
+  finalAction: FinalAction;
+  attemptCount: number;
+  restoredTokenCount: number;
+}
+
 export interface ObligationRule {
   id: string;
   severity: "hard" | "soft";
@@ -192,6 +207,23 @@ export interface DemoScenario {
   evidenceScope: string;
   valuesSynthetic: boolean;
   targetModelInference: boolean;
+  runtimeSourceMapSummary?: RuntimeSourceMapSummary;
+  runtimeRecoverySummary?: RuntimeRecoverySummary;
+}
+
+export interface BenchmarkLiveEvidence {
+  modelId: string;
+  successfulRequests: number;
+  infrastructureFailures: number;
+  fullContext: { correct: number; denominator: number };
+  cprgc: { correct: number; denominator: number };
+  pairedRetention: { correct: number; denominator: number; value: number; wilsonLow: number; wilsonHigh: number };
+  perSourceRetention: Record<SourceKind, { correct: number; denominator: number }>;
+  providerRequestInputReduction: number;
+  providerUsage: { fullInput: number; cprgcInput: number; fullOutput: number; cprgcOutput: number };
+  emittedContextReduction: number;
+  fallbackAdjustedReduction: number;
+  failureTriage: { itemId: string; category: string; summary: string }[];
 }
 
 export interface BenchmarkData {
@@ -227,6 +259,7 @@ export interface BenchmarkData {
     cost: number | null;
     failureCounts: Record<string, number>;
   };
+  liveEvidence: BenchmarkLiveEvidence | null;
 }
 
 export interface ArchitectureStage {
@@ -256,8 +289,10 @@ export interface CompressRequest {
   query: string | null;
   mode: CompressionMode;
   exactBudget: number | null;
-  tokenizerIdentity: string;
+  tokenizerBackend: string;
+  tokenizerEncoding: string;
   maximumRecoveryAttempts: number;
+  maximumFinalBudget: number | null;
   fixtureId: string;
 }
 

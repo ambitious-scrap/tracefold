@@ -43,7 +43,7 @@ export function LandingView({ benchmark, scenario, onNavigate }: { benchmark?: B
           <div className="landing-hero__assurance" aria-label="Demo assurances">
             <span><i className="landing-status-dot" aria-hidden="true" />Committed demo data</span>
             <span>No target-model requests</span>
-            <span>Retention unmeasured</span>
+            <span>{benchmark?.liveEvidence ? `${benchmark.liveEvidence.pairedRetention.correct}/${benchmark.liveEvidence.pairedRetention.denominator} paired retention` : "Evidence loading"}</span>
           </div>
         </div>
         <div className="landing-hero__trace" aria-hidden="true"><i /><i /><i /></div>
@@ -93,7 +93,7 @@ export function LandingView({ benchmark, scenario, onNavigate }: { benchmark?: B
       <section className="landing-proof-strip" aria-label="TraceFold principles">
         <div><strong>Source mapped</strong><p>Compact fragments point back to recorded source evidence.</p></div>
         <div><strong>Independently verified</strong><p>Structural checks are recomputed outside the compressor.</p></div>
-        <div><strong>Claims stay bounded</strong><p>Answer retention remains unmeasured until valid inference exists.</p></div>
+        <div><strong>Claims stay bounded</strong><p>Phase 9 paired retention is reported with its benchmark, model, and Wilson interval.</p></div>
       </section>
 
       <section className="landing-section landing-method" id="method" aria-labelledby="method-title">
@@ -127,14 +127,14 @@ export function LandingView({ benchmark, scenario, onNavigate }: { benchmark?: B
 
       <section className="landing-section landing-evidence" id="benchmarks" aria-labelledby="evidence-title">
         <div className="landing-section__intro">
-          <p className="landing-kicker">Prepared evidence</p>
-          <h2 id="evidence-title">Ready to measure.<br />Not pretending we did.</h2>
-          <p>ContextProofBench preparation is visible now. Downstream answer retention appears only after live or valid replay inference.</p>
-          <button className="landing-button landing-button--dark" type="button" onClick={() => onNavigate("benchmarks")}>View benchmark state <Icon name="arrow" size={16} /></button>
+          <p className="landing-kicker">Frozen Phase 9 evidence</p>
+          <h2 id="evidence-title">Measured live.<br />Claimed narrowly.</h2>
+          <p>ContextProofBench v1 paired evidence is shown separately from configured context reduction and structural verification.</p>
+          <button className="landing-button landing-button--dark" type="button" onClick={() => onNavigate("benchmarks")}>View benchmark evidence <Icon name="arrow" size={16} /></button>
         </div>
         <div className="landing-evidence__facts">
-          {benchmark ? <><EvidenceFact value={benchmark.itemCount.toString()} label="prepared questions" /><EvidenceFact value={Object.keys(benchmark.sourceKindDistribution).length.toString()} label="source kinds" /><EvidenceFact value={benchmark.liveRequestCount.toString()} label="live requests" /><EvidenceFact value="Unmeasured" label="downstream retention" /></> : <><EvidenceFact value="—" label="prepared questions" /><EvidenceFact value="—" label="source kinds" /><EvidenceFact value="—" label="live requests" /><EvidenceFact value="Unmeasured" label="downstream retention" /></>}
-          <p className="landing-evidence__note">Structural demo data is synthetic. Fixture-byte metrics are not production tokens.</p>
+          {benchmark?.liveEvidence ? <><EvidenceFact value={benchmark.itemCount.toString()} label="benchmark items" /><EvidenceFact value={Object.keys(benchmark.sourceKindDistribution).length.toString()} label="source kinds" /><EvidenceFact value={benchmark.liveRequestCount.toString()} label="successful live requests" /><EvidenceFact value={`${benchmark.liveEvidence.pairedRetention.correct}/${benchmark.liveEvidence.pairedRetention.denominator}`} label="paired retention" /></> : <><EvidenceFact value="—" label="benchmark items" /><EvidenceFact value="—" label="source kinds" /><EvidenceFact value="—" label="live requests" /><EvidenceFact value="—" label="paired retention" /></>}
+          <p className="landing-evidence__note">Four compressible classes exceeded 70% configured reduction; Python remained incompressible at its protected floor.</p>
         </div>
       </section>
 
@@ -145,7 +145,7 @@ export function LandingView({ benchmark, scenario, onNavigate }: { benchmark?: B
       </section>
     </main>
 
-    <footer className="landing-footer"><span>TraceFold · proof workbench</span><span>Structural evidence only · downstream retention unmeasured</span></footer>
+    <footer className="landing-footer"><span>TraceFold · proof workbench</span><span>Structural proof and paired answer evidence remain separate</span></footer>
   </div>;
 }
 

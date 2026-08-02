@@ -9,9 +9,10 @@ interface SourceMapWorkbenchProps {
   fragments: CompactFragment[];
   sourceSpans: SourceSpan[];
   sourceMapAvailable?: boolean;
+  unavailableNote?: string;
 }
 
-export function SourceMapWorkbench({ source, compactContext, fragments, sourceSpans, sourceMapAvailable = false }: SourceMapWorkbenchProps) {
+export function SourceMapWorkbench({ source, compactContext, fragments, sourceSpans, sourceMapAvailable = false, unavailableNote }: SourceMapWorkbenchProps) {
   const [selectedFragmentId, setSelectedFragmentId] = useState<string | null>(fragments[0]?.id ?? null);
   const [query, setQuery] = useState("");
   const [wrap, setWrap] = useState(true);
@@ -36,13 +37,13 @@ export function SourceMapWorkbench({ source, compactContext, fragments, sourceSp
   return (
     <section className="source-map" aria-labelledby="comparison-title">
       <div className="source-map__toolbar">
-        <div><span className="section-kicker">Source comparison</span><h2 id="comparison-title">{sourceMapAvailable ? "Select a compact fragment to trace its source." : "Compare prepared text matches."}</h2></div>
+        <div><span className="section-kicker">Source comparison</span><h2 id="comparison-title">{sourceMapAvailable ? "Select a compact fragment to trace its source." : "Compare source and compact context."}</h2></div>
         <div className="source-map__tools">
           <label className="search-field"><Icon name="search" size={15} /><span className="sr-only">Search both contexts</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search evidence" /></label>
           <button className={`text-button ${wrap ? "is-active" : ""}`} type="button" aria-pressed={wrap} onClick={() => setWrap((value) => !value)}>{wrap ? "Disable line wrap" : "Enable line wrap"}</button>
         </div>
       </div>
-      {!sourceMapAvailable ? <div className="source-map__availability" role="status"><Icon name="alert" size={15} /><span><strong>Verified source mapping is unavailable.</strong> Highlights show prepared text matches only; they do not claim lineage.</span></div> : null}
+      {!sourceMapAvailable ? <div className="source-map__availability" role="status"><Icon name="alert" size={15} /><span><strong>Detailed lineage unavailable.</strong> {unavailableNote ?? "No line-level mappings are claimed for this result."}</span></div> : null}
       <div className="source-map__legend" aria-label="Lineage legend">
         <span><i className="legend-swatch legend-swatch--copy" />Exact copy</span>
         <span><i className="legend-swatch legend-swatch--fact" />Compact exact fact</span>

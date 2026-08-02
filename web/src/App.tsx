@@ -16,7 +16,7 @@ const navItems: { route: Route; label: string; note: string; icon: IconName }[] 
   { route: "compress", label: "Compress", note: "Source → compact", icon: "compress" },
   { route: "proof", label: "Proof", note: "Certificate & rules", icon: "proof" },
   { route: "recovery", label: "Recovery", note: "Failure history", icon: "recovery" },
-  { route: "benchmarks", label: "Benchmarks", note: "Prepared, unscored", icon: "benchmarks" },
+  { route: "benchmarks", label: "Benchmarks", note: "Live Phase 9 evidence", icon: "benchmarks" },
   { route: "architecture", label: "Architecture", note: "Trust pipeline", icon: "architecture" },
 ];
 
@@ -27,7 +27,7 @@ const guideScenes: { route: Route; scenario: ScenarioId; label: string }[] = [
   { route: "proof", scenario: "verified-target", label: "Inspect relation evidence" },
   { route: "recovery", scenario: "recovery-fallback", label: "Run recovery fixture" },
   { route: "recovery", scenario: "recovery-fallback", label: "Show final verified result" },
-  { route: "benchmarks", scenario: "prepared-benchmark", label: "Show honest benchmark state" },
+  { route: "benchmarks", scenario: "prepared-benchmark", label: "Show frozen paired evidence" },
 ];
 
 export function App() {
@@ -36,7 +36,7 @@ export function App() {
   const [bundle, setBundle] = useState<DemoBundle | null>(null);
   const [scenario, setScenario] = useState<DemoScenario | null>(null);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>("verified-target");
-  const [request, setRequest] = useState<CompressRequest>({ sourceKind: "document", sourceText: "", query: null, mode: "target", exactBudget: null, tokenizerIdentity: "Fixture byte counter · v1", maximumRecoveryAttempts: 3, fixtureId: "verified-target" });
+  const [request, setRequest] = useState<CompressRequest>({ sourceKind: "document", sourceText: "", query: null, mode: "target", exactBudget: null, tokenizerBackend: "tiktoken", tokenizerEncoding: "cl100k_base", maximumRecoveryAttempts: 3, maximumFinalBudget: null, fixtureId: "verified-target" });
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -94,12 +94,12 @@ export function App() {
       setSelectedScenarioId(response.scenario.id);
       setConnected(response.connected);
       setUsedStaticFallback(response.usedStaticFallback);
-      setError(response.error ? { code: response.error.code, message: `${response.error.message} Showing committed demo data instead.` } : null);
+      setError(response.error ? { code: response.error.code, message: `${response.error.message} Demo fallback: showing a committed scenario, not a result for your custom source.` } : null);
     } else if (bundle) {
       const fallback = bundle.scenarios.find((item) => item.id === selectedScenarioId) ?? bundle.scenarios[0];
       setScenario(fallback);
       setUsedStaticFallback(true);
-      setError({ code: response.error?.code ?? "BACKEND_UNAVAILABLE", message: response.error ? `${response.error.message} Showing committed demo data instead.` : "Backend unavailable. Showing committed demo data instead." });
+      setError({ code: response.error?.code ?? "BACKEND_UNAVAILABLE", message: response.error ? `${response.error.message} Demo fallback: showing a committed scenario, not a result for your custom source.` : "Backend unavailable. Demo fallback: showing a committed scenario, not a result for your custom source." });
     }
     setBusy(false);
   }, [bundle, client, request, selectedScenarioId]);
@@ -139,7 +139,7 @@ export function App() {
       {route === "recovery" ? <RecoveryView scenario={currentScenario} /> : null}
       {route === "benchmarks" ? <BenchmarksView benchmark={bundle.benchmark} /> : null}
       {route === "architecture" ? <ArchitectureView stages={bundle.architecture} /> : null}
-      <footer className="app-footer"><span>TraceFold · static demo artifacts</span><span>Structural evidence only · downstream retention unmeasured</span></footer>
+      <footer className="app-footer"><span>TraceFold · local compression + committed evidence</span><span>Structural verification and Phase 9 paired retention are reported separately</span></footer>
     </main>
   </div>;
 }

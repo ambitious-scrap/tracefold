@@ -9,9 +9,32 @@ const request: CompressRequest = {
   query: null,
   mode: "target",
   exactBudget: null,
-  tokenizerIdentity: "Fixture byte counter · v1",
+  tokenizerBackend: "tiktoken",
+  tokenizerEncoding: "cl100k_base",
   maximumRecoveryAttempts: 3,
+  maximumFinalBudget: null,
   fixtureId: "verified-target",
+};
+
+const publicPayload = {
+  run_id: "00000000-0000-4000-8000-000000000001",
+  source_id: "src:test",
+  status: "verified_compressed",
+  compressed_context: "timeout=5000ms",
+  tokenizer_identity: { implementation: "tiktoken", identifier: "cl100k_base", revision: "0.13.0", configuration_hash: "sha256:test" },
+  original_tokens: 100,
+  raw_tokens: 30,
+  final_tokens: 32,
+  raw_reduction: 0.7,
+  final_reduction: 0.68,
+  final_action: "restore_spans",
+  certificate: null,
+  verification_report: null,
+  compact_verification_report: null,
+  failed_invariants: [{ code: "TEST_INVARIANT" }],
+  recovery: { final_status: "valid", final_action: "restore_spans", attempt_count: 1, restored_token_count: 2 },
+  source_map: { map_id: "map:test", artifact_count: 3, span_count: 8, mapping_count: 4, omission_count: 1 },
+  warnings: [],
 };
 
 function response(payload: unknown, ok = true, status = 200): Response {
@@ -65,5 +88,33 @@ describe("TraceFold API adapter", () => {
     expect(result.scenario).not.toBeNull();
     expect(result.error?.code).toBe("BACKEND_HTTP_422");
     expect(result.error?.message).toBe("TraceFold backend did not accept this request.");
+  });
+
+  it("maps UI request fields to the frozen public API contract", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response(publicPayload));
+    const client = createTracefoldClient({ mode: "backend", fetchImpl });
+    await client.compress({ ...request, sourceKind: "logs" as CompressRequest["sourceKind"], exactBudget: 40, maximumFinalBudget: 60 });
+    const init = fetchImpl.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    expect(body).toMatchObject({ source_text: "source", source_kind: "log", mode: "target", target_token_budget: 40, tokenizer_backend: "tiktoken", tokenizer_encoding: "cl100k_base", maximum_recovery_attempts: 3, maximum_final_budget: 60 });
+    expect(body).not.toHaveProperty("fixtureId");
+    expect(body).not.toHaveProperty("sourceText");
+    expect(JSON.stringify(body)).not.toMatch(/api.?key|target.?model|provider/i);
+  });
+
+  it("maps the public response without fabricating detailed lineage", async () => {
+    const client = createTracefoldClient({ mode: "backend", fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(response(publicPayload)) });
+    const result = await client.compress(request);
+    expect(result.connected).toBe(true);
+    expect(result.scenario?.source.text).toBe("source");
+    expect(result.scenario?.compactContext).toBe("timeout=5000ms");
+    expect(result.scenario?.result.tokenizerIdentity).toBe("tiktoken/cl100k_base@0.13.0");
+    expect(result.scenario?.result.rawReduction.value).toBe(0.7);
+    expect(result.scenario?.result.finalReduction.value).toBe(0.68);
+    expect(result.scenario?.sourceMap.available).toBe(false);
+    expect(result.scenario?.sourceMap.mappings).toEqual([]);
+    expect(result.scenario?.sourceMap.note).toBe("Source-map summary available. Detailed span mappings are not included in the public response.");
+    expect(result.scenario?.runtimeSourceMapSummary?.mappingCount).toBe(4);
+    expect(result.scenario?.runtimeRecoverySummary?.attemptCount).toBe(1);
   });
 });

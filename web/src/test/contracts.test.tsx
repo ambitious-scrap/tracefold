@@ -36,12 +36,12 @@ describe("metric-source safety", () => {
     expect(coveragePercent({ verified: 0, discovered: 0, mandatory: 0, denominatorMeaning: "relations", sourceNote: "none" })).toBe("Not applicable");
   });
 
-  it("renders unmeasured benchmark retention without an empty accuracy chart", () => {
+  it("renders paired retention without a generic accuracy claim", () => {
     render(<BenchmarksView benchmark={makeBundle().benchmark} />);
-    expect(screen.getByText("Downstream accuracy is unmeasured")).toBeInTheDocument();
-    expect(screen.getByText("Prepared only")).toBeInTheDocument();
-    expect(screen.getAllByText("Unmeasured").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("img", { name: /accuracy/i })).not.toBeInTheDocument();
+    expect(screen.getByText("97.8261% paired retention")).toBeInTheDocument();
+    expect(screen.getByText("46/50")).toBeInTheDocument();
+    expect(screen.getByText("45/50")).toBeInTheDocument();
+    expect(screen.queryByText(/98% accuracy/i)).not.toBeInTheDocument();
   });
 
   it("keeps raw and final reductions separate and shows zero fallback savings", () => {

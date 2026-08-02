@@ -56,7 +56,9 @@ def compress_public(request: PublicCompressionRequest) -> PublicCompressionRespo
         run_id=result.raw_result.run_id,
         source_id=source.source_id,
         status=result.status,
-        compressed_context=result.context,
+        compressed_context=(
+            request.source_text if result.status.value == "incompressible" else result.context
+        ),
         tokenizer_identity=result.tokenizer_identity,
         original_tokens=result.diagnostics.original_tokens,
         raw_tokens=result.diagnostics.raw_compressed_tokens,
