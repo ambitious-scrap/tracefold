@@ -20,7 +20,7 @@ describe("application routes and primary controls", () => {
   it("renders the landing page and hands off to the workbench", async () => {
     window.history.replaceState({}, "", "/");
     render(<App />);
-    expect(screen.getByRole("heading", { name: "Make long context smaller without losing the trail." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Compress context. Keep the evidence." })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Try the workbench/ }));
     expect(await screen.findByRole("heading", { name: "Compress long context. Keep proof." })).toBeInTheDocument();
   });
