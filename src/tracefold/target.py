@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from collections.abc import Iterable
 from datetime import UTC, datetime
@@ -27,6 +28,7 @@ from tracefold.schemas.phase7 import (
 from tracefold.serialization import canonical_json_bytes
 
 TRANSIENT_STATUS_CODES = frozenset({408, 409, 425, 429}) | frozenset(range(500, 600))
+MAX_PROVIDER_RETRY_WAIT_SECONDS = 120.0
 COMPONENT_VERSION = "tracefold.target/1.0.0"
 
 
@@ -120,6 +122,7 @@ class TargetAdapter:
         self._transport = transport
         self._sleep = sleep
         self._allow_live = allow_live
+        self._live_requests_started = 0
         self._live_error: str | None
         if settings.mode == TargetMode.LIVE and allow_live is False:
             self._live_error = "LIVE_PERMISSION_REQUIRED"
@@ -145,6 +148,9 @@ class TargetAdapter:
             maximum_output_tokens=128,
             seed=0,
             maximum_retries=2,
+            inter_request_delay_seconds=float(
+                os.getenv("TRACEFOLD_INTER_REQUEST_DELAY_SECONDS", "0")
+            ),
         )
         return cls(
             settings,
@@ -170,6 +176,9 @@ class TargetAdapter:
             return self._failure(
                 request, self._live_error, "live inference requires explicit permission"
             )
+        if self._live_requests_started and self.settings.inter_request_delay_seconds:
+            self._sleep(self.settings.inter_request_delay_seconds)
+        self._live_requests_started += 1
         return self._live_response(request)
 
     def _failure(
@@ -306,6 +315,7 @@ class TargetAdapter:
         if request.seed is not None:
             payload["seed"] = request.seed
         retries = 0
+        provider_wait_seconds = 0.0
         started = time.monotonic()
         last_error: tuple[str, str, int | None] | None = None
         with httpx.Client(timeout=request.timeout_seconds, transport=self._transport) as client:
@@ -327,11 +337,15 @@ class TargetAdapter:
                     response.status_code in TRANSIENT_STATUS_CODES
                     and retries < self.settings.maximum_retries
                 ):
-                    self._sleep(0.25 * (2**retries))
+                    remaining_wait = MAX_PROVIDER_RETRY_WAIT_SECONDS - provider_wait_seconds
+                    delay = min(_retry_delay(response, retries), max(0.0, remaining_wait))
+                    if delay:
+                        self._sleep(delay)
+                        provider_wait_seconds += delay
                     retries += 1
                     continue
                 if response.status_code >= 400:
-                    code, message = _provider_error(response)
+                    code, message = _provider_error(response, secret=self._api_key)
                     last_error = (code, message, response.status_code)
                     break
                 try:
@@ -381,15 +395,39 @@ class TargetAdapter:
         )
 
 
-def _provider_error(response: httpx.Response) -> tuple[str, str]:
+def _sanitize_provider_text(value: object, *, secret: str | None) -> str:
+    text = str(value)
+    if secret:
+        text = text.replace(secret, "[redacted]")
+    return re.sub(r"Bearer\s+\S+", "Bearer [redacted]", text, flags=re.IGNORECASE)[:240]
+
+
+def _provider_error(response: httpx.Response, *, secret: str | None) -> tuple[str, str]:
     try:
         payload = response.json()
         error = payload.get("error", {}) if isinstance(payload, dict) else {}
-        code = str(error.get("code", f"HTTP_{response.status_code}"))
-        message = str(error.get("message", "provider request failed"))[:240]
+        code = _sanitize_provider_text(
+            error.get("code", f"HTTP_{response.status_code}"), secret=secret
+        )
+        message = _sanitize_provider_text(
+            error.get("message", "provider request failed"), secret=secret
+        )
     except (ValueError, TypeError):
         code, message = f"HTTP_{response.status_code}", "provider request failed"
-    return code, message.replace("Bearer ", "Bearer [redacted]")
+    return code, message
+
+
+def _retry_delay(response: httpx.Response, retry_count: int) -> float:
+    retry_after = response.headers.get("Retry-After")
+    if retry_after is not None:
+        try:
+            seconds = float(retry_after)
+        except ValueError:
+            pass
+        else:
+            if seconds >= 0:
+                return min(seconds, MAX_PROVIDER_RETRY_WAIT_SECONDS)
+    return float(0.25 * (2**retry_count))
 
 
 def _answer_from_payload(payload: dict[str, Any], mode: str) -> str | None:

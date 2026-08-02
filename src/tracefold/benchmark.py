@@ -1072,6 +1072,7 @@ def _manifest(
     model_id: str,
     tokenizer: Tokenizer,
     pricing_config: PricingConfig | None = None,
+    inter_request_delay_seconds: float = 0,
 ) -> BenchmarkRun:
     commit = _git_commit()
     identity = tokenizer.identity
@@ -1117,6 +1118,7 @@ def _manifest(
             else None
         ),
         random_seed=0,
+        inter_request_delay_seconds=inter_request_delay_seconds,
         failures=[],
         environment_summary={
             "git_commit": commit,

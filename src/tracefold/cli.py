@@ -322,6 +322,7 @@ def _run_live_phase8(
     typer.echo(f"tokenizer={tokenizer.identity.implementation}/{tokenizer.identity.identifier}")
     typer.echo(f"items={len(items)} methods={len(method_ids)} requests={expected}")
     typer.echo(f"output_dir={output_dir}")
+    typer.echo(f"request_delay_seconds={adapter.settings.inter_request_delay_seconds:g}")
     typer.echo("pricing_configured=false")
 
     scores = list(run_benchmark(items, prepared, adapter))
@@ -343,6 +344,7 @@ def _run_live_phase8(
         method_ids=method_ids,
         model_id=adapter.settings.model_id,
         tokenizer=tokenizer,
+        inter_request_delay_seconds=adapter.settings.inter_request_delay_seconds,
     )
     (output_dir / "run-manifest.json").write_bytes(
         canonical_json_bytes(manifest.model_dump(mode="json")) + b"\n"
