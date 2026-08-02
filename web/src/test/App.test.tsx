@@ -22,25 +22,25 @@ describe("application routes and primary controls", () => {
     render(<App />);
     expect(screen.getByRole("heading", { name: "Compress context. Keep the evidence." })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Try the workbench/ }));
-    expect(await screen.findByRole("heading", { name: "Compress long context. Keep proof." })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Compress context. Verify what remains." })).toBeInTheDocument();
   });
 
   it("renders every primary route with stable navigation", async () => {
     render(<App />);
-    expect(await screen.findByRole("heading", { name: "Compress long context. Keep proof." })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Compress context. Verify what remains." })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Proof/ }));
-    expect(await screen.findByRole("heading", { name: "Evidence, recomputed." })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Verify the compact artifact independently." })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Recovery/ }));
-    expect(await screen.findByRole("heading", { name: "No recovery event in this scenario" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "No recovery was needed" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Benchmarks/ }));
-    expect(await screen.findByRole("heading", { name: "Prepared, not scored." })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Prepared artifacts. No accuracy score yet." })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Architecture/ }));
     expect(await screen.findByRole("region", { name: "TraceFold pipeline" })).toBeInTheDocument();
   });
 
   it("keeps navigation and primary form controls keyboard reachable", async () => {
     render(<App />);
-    await screen.findByRole("heading", { name: "Compress long context. Keep proof." });
+    await screen.findByRole("heading", { name: "Compress context. Verify what remains." });
     const proofButton = screen.getByRole("button", { name: /Proof/ });
     const compressButton = screen.getByRole("button", { name: /Compress & verify/ });
     proofButton.focus();
@@ -59,7 +59,7 @@ describe("application routes and primary controls", () => {
       .mockResolvedValueOnce(response(bundle));
     vi.stubGlobal("fetch", fetchImpl);
     render(<App />);
-    await screen.findByRole("heading", { name: "Compress long context. Keep proof." });
+    await screen.findByRole("heading", { name: "Compress context. Verify what remains." });
     fireEvent.click(screen.getByRole("button", { name: /Compress & verify/ }));
     await waitFor(() => expect(screen.getByText(/Static demo/)).toBeInTheDocument());
   });
@@ -67,7 +67,7 @@ describe("application routes and primary controls", () => {
   it("shows a useful non-blank error state when demo data is unavailable", async () => {
     vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockRejectedValue(new Error("network unavailable")));
     render(<App />);
-    expect(await screen.findByRole("heading", { name: "Demo data unavailable" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Try loading again" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Demo evidence could not load" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reload demo evidence" })).toBeInTheDocument();
   });
 });

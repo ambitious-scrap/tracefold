@@ -31,6 +31,6 @@ describe("proof and recovery views", () => {
 
   it("shows a safe empty state when a scenario has no recovery event", () => {
     render(<RecoveryView scenario={makeScenario()} />);
-    expect(screen.getByRole("heading", { name: "No recovery event in this scenario" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "No recovery was needed" })).toBeInTheDocument();
   });
 });
