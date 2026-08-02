@@ -15,7 +15,7 @@ from tracefold.benchmark import (
     summarize_scores,
 )
 from tracefold.hashing import sha256_domain
-from tracefold.schemas.common import HashDomain
+from tracefold.schemas.common import FinalAction, HashDomain
 from tracefold.schemas.phase7 import BenchmarkItem, PreparedContext, ScoreRecord
 from tracefold.serialization import canonical_json_bytes
 
@@ -69,7 +69,7 @@ def _configured_mean_reduction(
         for item in prepared
         if item.method_id == "cprgc_target"
         and item.configured_context_reduction is not None
-        and (not emitted_only or not item.fallback)
+        and (not emitted_only or item.final_action == FinalAction.EMIT)
     ]
     return f"{sum(values) / len(values):.6f}" if values else None
 
@@ -98,7 +98,10 @@ def _gate(
         or full_score_ids != expected_ids
     ):
         return "fail"
-    if any(item.verification_status != "valid" for item in target_prepared):
+    if any(
+        item.final_action == FinalAction.EMIT and item.verification_status != "valid"
+        for item in target_prepared
+    ):
         return "fail"
     if any(
         item.hard_obligation_coverage_status == "applicable"
@@ -109,7 +112,8 @@ def _gate(
     ):
         return "fail"
     if any(
-        item.fallback and float(item.configured_context_reduction or "0") != 0
+        item.final_action != FinalAction.EMIT
+        and float(item.configured_context_reduction or "0") != 0
         for item in target_prepared
     ):
         return "fail"

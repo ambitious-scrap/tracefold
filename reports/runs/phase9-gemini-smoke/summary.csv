@@ -1,0 +1,3 @@
+method,correct,denominator,accuracy,paired_retention,mean_reduction,infrastructure_failures
+cprgc_target,5,5,1.0,1.0,0.5712744,0
+full_context,5,5,1.0,1.0,0.0,0
