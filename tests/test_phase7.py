@@ -35,6 +35,7 @@ from tracefold.target import (
     replay_record_from_response,
     replay_record_hash,
 )
+from tracefold.tokenizers import FixtureByteTokenizer
 
 
 def _settings(mode: TargetMode = TargetMode.DISABLED) -> TargetSettings:
@@ -256,7 +257,9 @@ def test_context_proof_bench_is_balanced_and_deterministic() -> None:
 
 def test_prepared_methods_use_matched_budgets_and_item_filter() -> None:
     items = build_context_proof_bench()[:1]
-    prepared = prepare_contexts(items, method_ids=DEFAULT_METHOD_IDS)
+    prepared = prepare_contexts(
+        items, tokenizer=FixtureByteTokenizer(), method_ids=DEFAULT_METHOD_IDS
+    )
     assert {item.matched_budget for item in prepared} == {prepared[0].matched_budget}
     selected = _selected_prepared(
         list(prepared),
@@ -270,7 +273,11 @@ def test_prepared_methods_use_matched_budgets_and_item_filter() -> None:
 def test_prepare_artifacts_and_report_are_structurally_unmeasured_without_responses(
     tmp_path: Path,
 ) -> None:
-    result = prepare_artifacts(tmp_path, method_ids=("full_context", "cprgc_target"))
+    result = prepare_artifacts(
+        tmp_path,
+        tokenizer=FixtureByteTokenizer(),
+        method_ids=("full_context", "cprgc_target"),
+    )
     assert result["summary"].mode == BenchmarkRunMode.PREPARE
     assert result["summary"].primary_gate == "unmeasured"
     assert result["summary"].live_request_count == 0

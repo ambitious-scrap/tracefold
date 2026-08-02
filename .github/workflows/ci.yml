@@ -10,6 +10,8 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      _TYPER_FORCE_DISABLE_TERMINAL: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,11 +39,11 @@ jobs:
           cmp /tmp/phase6-a.json /tmp/phase6-b.json
       - name: Deterministic Phase 7 prepare
         run: |
-          tracefold benchmark prepare
-          sha256sum reports/final/benchmark-items.jsonl reports/final/benchmark-methods.json reports/final/prepared-contexts.jsonl > /tmp/phase7-a.sha
-          tracefold benchmark prepare
-          sha256sum reports/final/benchmark-items.jsonl reports/final/benchmark-methods.json reports/final/prepared-contexts.jsonl > /tmp/phase7-b.sha
-          cmp /tmp/phase7-a.sha /tmp/phase7-b.sha
+          tracefold benchmark prepare --tokenizer-backend tiktoken --tokenizer-encoding cl100k_base --output-dir /tmp/phase7-a
+          tracefold benchmark prepare --tokenizer-backend tiktoken --tokenizer-encoding cl100k_base --output-dir /tmp/phase7-b
+          cmp /tmp/phase7-a/benchmark-items.jsonl /tmp/phase7-b/benchmark-items.jsonl
+          cmp /tmp/phase7-a/benchmark-methods.json /tmp/phase7-b/benchmark-methods.json
+          cmp /tmp/phase7-a/prepared-contexts.jsonl /tmp/phase7-b/prepared-contexts.jsonl
       - name: Compression API smoke
         run: |
           python - <<'PY'

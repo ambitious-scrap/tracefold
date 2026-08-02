@@ -12,9 +12,12 @@ from tracefold.benchmark import (
     PRIMARY_METHOD_IDS,
     _manifest,
     _request_for,
+    filter_items_by_id_file,
     prepare_artifacts,
     run_benchmark,
+    write_artifact_hashes,
 )
+from tracefold.phase7_fixtures import build_context_proof_bench
 from tracefold.phase7_report import build_report
 from tracefold.schemas.certificate import PreservationCertificate
 from tracefold.schemas.phase6 import CPRGCMode
@@ -24,7 +27,7 @@ from tracefold.schemas.source_map import SourceMap
 from tracefold.serialization import canonical_json_bytes
 from tracefold.service import compress_public
 from tracefold.target import TargetAdapter, load_replay_records, replay_record_from_response
-from tracefold.tokenizers import TokenizerConfigurationError, resolve_tokenizer
+from tracefold.tokenizers import Tokenizer, TokenizerConfigurationError, resolve_tokenizer
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 schema_app = typer.Typer()
@@ -143,10 +146,32 @@ def _artifact_dir() -> Path:
     return Path("reports/final")
 
 
+def _benchmark_tokenizer(backend: str | None, encoding: str | None) -> Tokenizer:
+    resolved_backend = backend or os.getenv("TRACEFOLD_TOKENIZER_BACKEND")
+    resolved_encoding = encoding or os.getenv("TRACEFOLD_TOKENIZER_ENCODING")
+    if not resolved_backend or not resolved_encoding:
+        raise typer.BadParameter("benchmark requires --tokenizer-backend and --tokenizer-encoding")
+    try:
+        return resolve_tokenizer(resolved_backend, resolved_encoding)
+    except TokenizerConfigurationError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def _benchmark_items(item_ids_file: Path | None) -> tuple[Any, ...]:
+    items = build_context_proof_bench()
+    return filter_items_by_id_file(items, item_ids_file) if item_ids_file is not None else items
+
+
+def _benchmark_methods(methods: str | None, defaults: tuple[str, ...]) -> tuple[str, ...]:
+    return (
+        tuple(item.strip() for item in methods.split(",") if item.strip()) if methods else defaults
+    )
+
+
 def _ensure_prepared() -> tuple[list[Any], list[PreparedContext]]:
     directory = _artifact_dir()
     if not (directory / "prepared-contexts.jsonl").exists():
-        prepare_artifacts(directory)
+        prepare_artifacts(directory, tokenizer=_benchmark_tokenizer(None, None))
     items = [
         __import__(
             "tracefold.schemas.phase7", fromlist=["BenchmarkItem"]
@@ -241,68 +266,208 @@ def _run_live(
         ),
         encoding="utf-8",
     )
-    manifest = _manifest(mode=mode, item_count=len(items), method_ids=methods, model_id=model)
+    manifest = _manifest(
+        mode=mode,
+        item_count=len(items),
+        method_ids=methods,
+        model_id=model,
+        tokenizer=_benchmark_tokenizer(None, None),
+    )
     (directory / "run-manifest.json").write_bytes(
         canonical_json_bytes(manifest.model_dump(mode="json")) + b"\n"
     )
     build_report(directory)
 
 
+def _write_jsonl_models(path: Path, values: list[Any]) -> None:
+    path.write_text(
+        "".join(
+            canonical_json_bytes(value.model_dump(mode="json")).decode("utf-8") + "\n"
+            for value in values
+        ),
+        encoding="utf-8",
+    )
+
+
+def _run_live_phase8(
+    mode: BenchmarkRunMode,
+    *,
+    confirm_live: bool,
+    tokenizer_backend: str | None,
+    tokenizer_encoding: str | None,
+    item_ids_file: Path | None,
+    method_list: str | None,
+    output_dir: Path,
+) -> None:
+    if not _live_allowed(confirm_live):
+        raise typer.BadParameter(
+            "live benchmark requires --confirm-live or TRACEFOLD_ALLOW_LIVE_BENCHMARK=1"
+        )
+    tokenizer = _benchmark_tokenizer(tokenizer_backend, tokenizer_encoding)
+    items = _benchmark_items(item_ids_file)
+    if mode == BenchmarkRunMode.SMOKE_LIVE and item_ids_file is None:
+        first_by_kind: dict[str, Any] = {}
+        for item in items:
+            first_by_kind.setdefault(item.source_kind.value, item)
+        items = tuple(first_by_kind[kind] for kind in sorted(first_by_kind))
+    method_ids = _benchmark_methods(method_list, ("full_context", "cprgc_target"))
+    prepared_result = prepare_artifacts(
+        output_dir, tokenizer=tokenizer, items=items, method_ids=method_ids
+    )
+    prepared = list(prepared_result["prepared"])
+    adapter = TargetAdapter.from_environment(mode=TargetMode.LIVE, allow_live=True)
+    expected = len(items) * len(method_ids)
+    typer.echo(f"mode={mode.value}")
+    typer.echo(f"model={adapter.settings.model_id}")
+    typer.echo(f"tokenizer={tokenizer.identity.implementation}/{tokenizer.identity.identifier}")
+    typer.echo(f"items={len(items)} methods={len(method_ids)} requests={expected}")
+    typer.echo(f"output_dir={output_dir}")
+    typer.echo("pricing_configured=false")
+
+    scores = list(run_benchmark(items, prepared, adapter))
+    score_by_key = {(item.item_id, item.method_id): item for item in scores}
+    replay_records = []
+    for context in prepared:
+        item = next(value for value in items if value.item_id == context.item_id)
+        request = _request_for(item, context, adapter.settings)
+        replay_records.append(
+            replay_record_from_response(
+                request, score_by_key[(context.item_id, context.method_id)].target_response
+            )
+        )
+    _write_jsonl_models(output_dir / "responses-sanitized.jsonl", replay_records)
+    _write_jsonl_models(output_dir / "scored-results.jsonl", scores)
+    manifest = _manifest(
+        mode=mode,
+        item_count=len(items),
+        method_ids=method_ids,
+        model_id=adapter.settings.model_id,
+        tokenizer=tokenizer,
+    )
+    (output_dir / "run-manifest.json").write_bytes(
+        canonical_json_bytes(manifest.model_dump(mode="json")) + b"\n"
+    )
+    build_report(output_dir)
+    write_artifact_hashes(output_dir)
+    failures = sum(item.infrastructure_failure for item in scores)
+    model_mismatches = sum(
+        item.target_response.status.value == "success"
+        and item.target_response.model_id != adapter.settings.model_id
+        for item in scores
+    )
+    typer.echo(f"completed={len(scores)} failures={failures}")
+    if model_mismatches or (mode == BenchmarkRunMode.SMOKE_LIVE and failures > 1):
+        raise typer.Exit(code=1)
+
+
 @benchmark_app.command("prepare")
-def benchmark_prepare() -> None:
-    result = prepare_artifacts(_artifact_dir())
+def benchmark_prepare(
+    tokenizer_backend: str | None = typer.Option(None, "--tokenizer-backend"),
+    tokenizer_encoding: str | None = typer.Option(None, "--tokenizer-encoding"),
+    output_dir: Path = typer.Option(Path("reports/final"), "--output-dir"),  # noqa: B008
+    item_ids_file: Path | None = typer.Option(None, "--item-ids-file"),  # noqa: B008
+    methods: str | None = typer.Option(None, "--methods"),
+) -> None:
+    tokenizer = _benchmark_tokenizer(tokenizer_backend, tokenizer_encoding)
+    items = _benchmark_items(item_ids_file)
+    method_ids = _benchmark_methods(methods, DEFAULT_METHOD_IDS)
+    result = prepare_artifacts(output_dir, tokenizer=tokenizer, items=items, method_ids=method_ids)
+    build_report(output_dir)
+    write_artifact_hashes(output_dir)
     typer.echo(
-        f"mode=prepare items={len(result['items'])} methods={len(DEFAULT_METHOD_IDS)} "
-        f"requests={len(result['items']) * len(DEFAULT_METHOD_IDS)}"
+        f"mode=prepare items={len(result['items'])} methods={len(method_ids)} "
+        f"requests={len(result['items']) * len(method_ids)} output_dir={output_dir}"
     )
 
 
 @benchmark_app.command("smoke-live")
 def benchmark_smoke_live(
     confirm_live: bool = typer.Option(False, "--confirm-live"),
-    items: int | None = typer.Option(10, "--items"),
     methods: str | None = typer.Option(None, "--methods"),
+    tokenizer_backend: str | None = typer.Option(None, "--tokenizer-backend"),
+    tokenizer_encoding: str | None = typer.Option(None, "--tokenizer-encoding"),
+    item_ids_file: Path | None = typer.Option(None, "--item-ids-file"),  # noqa: B008
+    output_dir: Path = typer.Option(  # noqa: B008
+        Path("reports/runs/phase8-smoke"), "--output-dir"
+    ),
 ) -> None:
-    _run_live(
+    _run_live_phase8(
         BenchmarkRunMode.SMOKE_LIVE,
         confirm_live=confirm_live,
-        item_limit=items,
         method_list=methods,
+        tokenizer_backend=tokenizer_backend,
+        tokenizer_encoding=tokenizer_encoding,
+        item_ids_file=item_ids_file,
+        output_dir=output_dir,
     )
 
 
 @benchmark_app.command("full-live")
 def benchmark_full_live(
     confirm_live: bool = typer.Option(False, "--confirm-live"),
-    items: int | None = typer.Option(None, "--items"),
     methods: str | None = typer.Option(None, "--methods"),
+    tokenizer_backend: str | None = typer.Option(None, "--tokenizer-backend"),
+    tokenizer_encoding: str | None = typer.Option(None, "--tokenizer-encoding"),
+    item_ids_file: Path | None = typer.Option(None, "--item-ids-file"),  # noqa: B008
+    output_dir: Path = typer.Option(  # noqa: B008
+        Path("reports/runs/phase8-primary"), "--output-dir"
+    ),
 ) -> None:
-    _run_live(
-        BenchmarkRunMode.FULL_LIVE, confirm_live=confirm_live, item_limit=items, method_list=methods
+    _run_live_phase8(
+        BenchmarkRunMode.FULL_LIVE,
+        confirm_live=confirm_live,
+        method_list=methods,
+        tokenizer_backend=tokenizer_backend,
+        tokenizer_encoding=tokenizer_encoding,
+        item_ids_file=item_ids_file,
+        output_dir=output_dir,
     )
 
 
 @benchmark_app.command("replay")
 def benchmark_replay(
     replay_path: Path = Path("reports/final/responses-sanitized.jsonl"),
+    tokenizer_backend: str | None = typer.Option(None, "--tokenizer-backend"),
+    tokenizer_encoding: str | None = typer.Option(None, "--tokenizer-encoding"),
+    output_dir: Path = typer.Option(  # noqa: B008
+        Path("reports/runs/phase8-primary"), "--output-dir"
+    ),
+    item_ids_file: Path | None = typer.Option(None, "--item-ids-file"),  # noqa: B008
+    methods: str | None = typer.Option(None, "--methods"),
 ) -> None:
-    items, prepared = _ensure_prepared()
+    tokenizer = _benchmark_tokenizer(tokenizer_backend, tokenizer_encoding)
+    items = _benchmark_items(item_ids_file)
+    method_ids = _benchmark_methods(methods, ("full_context", "cprgc_target"))
+    prepared_result = prepare_artifacts(
+        output_dir, tokenizer=tokenizer, items=items, method_ids=method_ids
+    )
+    prepared = list(prepared_result["prepared"])
     records = load_replay_records(replay_path)
     adapter = TargetAdapter.from_environment(mode=TargetMode.REPLAY, replay_records=records)
     scores = run_benchmark(items, prepared, adapter)
-    directory = _artifact_dir()
-    (directory / "scored-results.jsonl").write_text(
-        "".join(
-            canonical_json_bytes(item.model_dump(mode="json")).decode("utf-8") + "\n"
-            for item in scores
-        ),
-        encoding="utf-8",
+    _write_jsonl_models(output_dir / "responses-sanitized.jsonl", list(records))
+    _write_jsonl_models(output_dir / "scored-results.jsonl", list(scores))
+    manifest = _manifest(
+        mode=BenchmarkRunMode.REPLAY,
+        item_count=len(items),
+        method_ids=method_ids,
+        model_id=adapter.settings.model_id,
+        tokenizer=tokenizer,
     )
-    build_report(directory)
+    (output_dir / "run-manifest.json").write_bytes(
+        canonical_json_bytes(manifest.model_dump(mode="json")) + b"\n"
+    )
+    build_report(output_dir)
+    write_artifact_hashes(output_dir)
     typer.echo(f"mode=replay items={len(items)} records={len(records)}")
 
 
 @benchmark_app.command("report")
-def benchmark_report() -> None:
-    payload = build_report(_artifact_dir())
+def benchmark_report(
+    output_dir: Path = typer.Option(  # noqa: B008
+        Path("reports/final"), "--output-dir"
+    ),
+) -> None:
+    payload = build_report(output_dir)
+    write_artifact_hashes(output_dir)
     typer.echo(canonical_json_bytes(payload).decode("utf-8"))

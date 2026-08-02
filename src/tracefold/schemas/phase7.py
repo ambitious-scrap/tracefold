@@ -33,6 +33,12 @@ class UsageSource(StrEnum):
     UNKNOWN = "unknown"
 
 
+class BenchmarkMetricSource(StrEnum):
+    FIXTURE_BYTES = "fixture_bytes"
+    CONFIGURED_TOKENIZER = "configured_tokenizer"
+    PROVIDER_USAGE = "provider_usage"
+
+
 class AnswerType(StrEnum):
     EXACT_STRING = "exact_string"
     IDENTIFIER = "identifier"
@@ -143,6 +149,12 @@ class ReplayRecord(StrictModel):
     response_hash: HashValue
     generated_at: datetime
     provider_request_id: str | None = None
+    benchmark_item_id: str | None = None
+    method_id: str | None = None
+    prompt_hash: HashValue | None = None
+    tokenizer_identity: TokenizerIdentity | None = None
+    compiler_commit: str | None = None
+    benchmark_runner_commit: str | None = None
     replay_record_hash: HashValue
 
 
@@ -212,6 +224,14 @@ class PreparedContext(StrictModel):
     original_token_count: int = Field(ge=0)
     context_token_count: int = Field(ge=0)
     matched_budget: int = Field(ge=1)
+    tokenizer_identity: TokenizerIdentity | None = None
+    metric_source: BenchmarkMetricSource | None = None
+    original_configured_token_count: int | None = Field(default=None, ge=0)
+    context_configured_token_count: int | None = Field(default=None, ge=0)
+    matched_configured_token_budget: int | None = Field(default=None, ge=1)
+    configured_context_reduction: str | None = None
+    compiler_commit: str | None = None
+    benchmark_runner_commit: str | None = None
     requested_reduction: str | None = None
     raw_reduction: str | None = None
     final_reduction: str | None = None
@@ -220,10 +240,20 @@ class PreparedContext(StrictModel):
     certificate_hash: HashValue | None = None
     verification_status: str = Field(min_length=1)
     hard_obligation_coverage: str | None = None
+    hard_obligation_coverage_status: Literal["applicable", "not_applicable"] = "not_applicable"
     relation_coverage: str | None = None
+    relation_coverage_status: Literal["applicable", "not_applicable"] = "not_applicable"
+    mandatory_obligation_count: int = Field(default=0, ge=0)
+    verified_mandatory_count: int = Field(default=0, ge=0)
+    discovered_relation_count: int = Field(default=0, ge=0)
+    verified_relation_count: int = Field(default=0, ge=0)
+    relation_class_diversity: int = Field(default=0, ge=0)
+    exact_relation_count: int = Field(default=0, ge=0)
+    inferred_relation_count: int = Field(default=0, ge=0)
     fallback: bool = False
     compiler_latency_ms: float | None = Field(default=None, ge=0)
     verification_latency_ms: float | None = Field(default=None, ge=0)
+    recovery_latency_ms: float | None = Field(default=None, ge=0)
     total_local_pipeline_latency_ms: float | None = Field(default=None, ge=0)
     warnings: list[str] = Field(default_factory=list)
 
@@ -241,9 +271,14 @@ class ScoreRecord(StrictModel):
     original_token_count: int = Field(ge=0)
     context_token_count: int = Field(ge=0)
     input_reduction: str | None = None
+    configured_context_reduction: str | None = None
+    provider_request_input_reduction: str | None = None
     raw_reduction: str | None = None
     final_reduction: str | None = None
     target_latency_ms: float | None = Field(default=None, ge=0)
+    local_compression_latency_ms: float | None = Field(default=None, ge=0)
+    verification_latency_ms: float | None = Field(default=None, ge=0)
+    recovery_latency_ms: float | None = Field(default=None, ge=0)
     end_to_end_latency_ms: float | None = Field(default=None, ge=0)
     input_cost: float | None = Field(default=None, ge=0)
     output_cost: float | None = Field(default=None, ge=0)
@@ -269,6 +304,9 @@ class BenchmarkRun(StrictModel):
     model_id: str = Field(min_length=1)
     endpoint_class: str = Field(min_length=1)
     tokenizer_identity: TokenizerIdentity
+    metric_source: BenchmarkMetricSource | None = None
+    compiler_commit: str | None = None
+    benchmark_runner_commit: str | None = None
     item_count: int = Field(ge=0)
     method_ids: list[str]
     request_count: int = Field(ge=0)
@@ -302,6 +340,7 @@ __all__ = [
     "AnswerKey",
     "AnswerType",
     "BenchmarkItem",
+    "BenchmarkMetricSource",
     "BenchmarkMethod",
     "BenchmarkRun",
     "BenchmarkRunMode",

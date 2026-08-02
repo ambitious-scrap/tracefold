@@ -12,7 +12,6 @@ from typing import Any
 from tracefold.benchmark import (
     BENCHMARK_VERSION,
     METHODS,
-    prepare_artifacts,
     summarize_scores,
 )
 from tracefold.hashing import sha256_domain
@@ -52,7 +51,7 @@ def _prepared_reductions(
     result: dict[str, str] = {}
     for kind in sorted(set(kinds.values())):
         values = [
-            item.final_reduction or "0.000000"
+            item.configured_context_reduction or "0.000000"
             for item in prepared
             if item.method_id == "cprgc_target" and kinds[item.item_id] == kind
         ]
@@ -60,6 +59,15 @@ def _prepared_reductions(
             f"{sum(float(value) for value in values) / len(values):.6f}" if values else "0.000000"
         )
     return result
+
+
+def _configured_mean_reduction(prepared: list[PreparedContext]) -> str | None:
+    values = [
+        float(item.configured_context_reduction)
+        for item in prepared
+        if item.method_id == "cprgc_target" and item.configured_context_reduction is not None
+    ]
+    return f"{sum(values) / len(values):.6f}" if values else None
 
 
 def _gate(
@@ -71,6 +79,19 @@ def _gate(
         return "unmeasured"
     if target.get("denominator", 0) == 0:
         return "unmeasured"
+    target_prepared = [item for item in prepared if item.method_id == "cprgc_target"]
+    if len(target_prepared) != 50:
+        return "fail"
+    if any(item.verification_status != "valid" or item.fallback for item in target_prepared):
+        return "fail"
+    if any(
+        item.hard_obligation_coverage_status == "applicable"
+        and item.hard_obligation_coverage != "1.000000"
+        or item.relation_coverage_status == "applicable"
+        and item.relation_coverage != "1.000000"
+        for item in target_prepared
+    ):
+        return "fail"
     target_retention = target.get("paired_retention")
     head_tail = methods.get("head_tail", {}).get("paired_retention")
     lexical = methods.get("lexical_top_k", {}).get("paired_retention")
@@ -95,7 +116,7 @@ def _gate(
 def build_report(output_dir: str | Path = "reports/final") -> dict[str, Any]:
     directory = Path(output_dir)
     if not (directory / "benchmark-items.jsonl").exists():
-        prepare_artifacts(directory)
+        raise FileNotFoundError(f"benchmark artifacts not prepared: {directory}")
     items = _read_jsonl(directory / "benchmark-items.jsonl", BenchmarkItem)
     prepared = _read_jsonl(directory / "prepared-contexts.jsonl", PreparedContext)
     score_path = directory / "scored-results.jsonl"
@@ -128,6 +149,17 @@ def build_report(output_dir: str | Path = "reports/final") -> dict[str, Any]:
         ),
         "infrastructure_failure_count": sum(1 for item in scores if item.infrastructure_failure),
         "structural_reduction_by_kind": _prepared_reductions(items, prepared),
+        "configured_mean_context_reduction": _configured_mean_reduction(prepared),
+        "configured_tokenizer_identity": (
+            prepared[0].tokenizer_identity.model_dump(mode="json")
+            if prepared and prepared[0].tokenizer_identity is not None
+            else None
+        ),
+        "metric_source": (
+            prepared[0].metric_source.value
+            if prepared and prepared[0].metric_source is not None
+            else None
+        ),
         "prepared_verification_statuses": dict(
             sorted(
                 Counter(

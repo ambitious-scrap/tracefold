@@ -19,6 +19,9 @@ tracefold = "tracefold.cli:app"
 [tool.hatch.build.targets.wheel]
 packages = ["src/tracefold"]
 
+[tool.hatch.build]
+exclude = ["/.venv*", "/.agents", "/.serena", "/.memsearch", "/.tokensave"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

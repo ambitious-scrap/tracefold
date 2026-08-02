@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import math
 import os
 import re
@@ -14,6 +15,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +24,6 @@ from tracefold.cprgc import compress_with_cprgc
 from tracefold.extractors import extract_obligations
 from tracefold.hashing import sha256_domain
 from tracefold.phase6_fixtures import long_fixture_inputs
-from tracefold.phase6_report import Phase6FixtureTokenizer, fixture_registry
 from tracefold.phase7_fixtures import build_context_proof_bench, build_controlled_context_stress
 from tracefold.schemas.common import FinalAction, HashDomain, TokenizerIdentity
 from tracefold.schemas.phase2 import ContentType, ExtractionResult
@@ -30,11 +31,12 @@ from tracefold.schemas.phase3 import (
     CompilerStrategy,
     RawCompressionRequest,
 )
-from tracefold.schemas.phase6 import CPRGCMode, CPRGCResult
+from tracefold.schemas.phase6 import CPRGCMode, CPRGCResult, RelationNode
 from tracefold.schemas.phase7 import (
     AnswerType,
     BenchmarkItem,
     BenchmarkMethod,
+    BenchmarkMetricSource,
     BenchmarkRun,
     BenchmarkRunMode,
     BenchmarkSummary,
@@ -49,6 +51,7 @@ from tracefold.schemas.phase7 import (
 from tracefold.serialization import canonical_json_bytes
 from tracefold.sources import ingest_source
 from tracefold.target import TargetAdapter, build_target_request
+from tracefold.tokenizers import Tokenizer, TokenizerRegistry
 
 BENCHMARK_VERSION = "ContextProofBench-v1"
 COMPONENT_VERSION = "tracefold.benchmark/1.0.0"
@@ -122,8 +125,6 @@ METHODS = (
     ),
 )
 METHOD_BY_ID = {item.method_id: item for item in METHODS}
-_FIXTURE_REGISTRY = fixture_registry()
-FIXTURE_TOKENIZER = _FIXTURE_REGISTRY.resolve(Phase6FixtureTokenizer.identity)
 
 
 def deterministic_run_id(label: str) -> str:
@@ -138,6 +139,25 @@ def ratio(original: int, current: int) -> str:
     if original <= 0:
         return "0.000000"
     return f"{max(0.0, min(1.0, 1 - current / original)):.6f}"
+
+
+def provider_request_input_reduction(
+    full_context_input_tokens: int | None, method_input_tokens: int | None
+) -> str | None:
+    if full_context_input_tokens is None or method_input_tokens is None:
+        return None
+    if full_context_input_tokens <= 0:
+        return None
+    return ratio(full_context_input_tokens, method_input_tokens)
+
+
+def _git_commit() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
 
 
 def prompt_for(item: BenchmarkItem, context: str) -> tuple[str, str]:
@@ -166,17 +186,17 @@ def _fixture_name(item: BenchmarkItem) -> str:
     return "logs" if item.source_kind == ContentType.LOG else item.source_kind.value
 
 
-def _token_count(text: str) -> int:
-    return FIXTURE_TOKENIZER.count(text)
+def _token_count(text: str, tokenizer: Tokenizer) -> int:
+    return tokenizer.count(text)
 
 
-def _take_prefix(text: str, budget: int) -> str:
-    if budget >= _token_count(text):
+def _take_prefix(text: str, budget: int, tokenizer: Tokenizer) -> str:
+    if budget >= _token_count(text, tokenizer):
         return text
     count = 0
     chars: list[str] = []
     for char in text:
-        cost = _token_count(char)
+        cost = _token_count(char, tokenizer)
         if count + cost > budget:
             break
         chars.append(char)
@@ -184,13 +204,13 @@ def _take_prefix(text: str, budget: int) -> str:
     return "".join(chars)
 
 
-def _take_suffix(text: str, budget: int) -> str:
-    if budget >= _token_count(text):
+def _take_suffix(text: str, budget: int, tokenizer: Tokenizer) -> str:
+    if budget >= _token_count(text, tokenizer):
         return text
     count = 0
     chars: list[str] = []
     for char in reversed(text):
-        cost = _token_count(char)
+        cost = _token_count(char, tokenizer)
         if count + cost > budget:
             break
         chars.append(char)
@@ -206,7 +226,7 @@ def _chunks(text: str) -> list[str]:
     return chunks or [text]
 
 
-def _lexical_context(text: str, question: str, budget: int) -> str:
+def _lexical_context(text: str, question: str, budget: int, tokenizer: Tokenizer) -> str:
     terms = [item for item in re.findall(r"[\w.-]+", question.lower()) if len(item) > 1]
     chunks = _chunks(text)
     ranked = sorted(
@@ -216,11 +236,11 @@ def _lexical_context(text: str, question: str, budget: int) -> str:
     selected: list[tuple[int, str]] = []
     cost = 0
     for index, chunk in ranked:
-        chunk_cost = _token_count(chunk)
+        chunk_cost = _token_count(chunk, tokenizer)
         if selected and cost + chunk_cost > budget:
             continue
         if not selected and chunk_cost > budget:
-            return _take_prefix(chunk, budget)
+            return _take_prefix(chunk, budget, tokenizer)
         selected.append((index, chunk))
         cost += chunk_cost
         if cost >= budget:
@@ -228,43 +248,73 @@ def _lexical_context(text: str, question: str, budget: int) -> str:
     return "".join(chunk for _, chunk in sorted(selected))
 
 
-def _head_tail_context(text: str, budget: int) -> str:
+def _head_tail_context(text: str, budget: int, tokenizer: Tokenizer) -> str:
     marker = "\n...\n"
-    if budget >= _token_count(text):
+    if budget >= _token_count(text, tokenizer):
         return text
-    available = max(0, budget - _token_count(marker))
+    available = max(0, budget - _token_count(marker, tokenizer))
     head_budget = math.ceil(available / 2)
     tail_budget = available - head_budget
-    candidate = _take_prefix(text, head_budget) + marker + _take_suffix(text, tail_budget)
-    if _token_count(candidate) <= budget:
+    candidate = (
+        _take_prefix(text, head_budget, tokenizer)
+        + marker
+        + _take_suffix(text, tail_budget, tokenizer)
+    )
+    if _token_count(candidate, tokenizer) <= budget:
         return candidate
-    return _take_prefix(text, budget)
+    return _take_prefix(text, budget, tokenizer)
 
 
-def _fallback_context(text: str, budget: int) -> str:
-    return _take_prefix(text, budget)
+def _fallback_context(text: str, budget: int, tokenizer: Tokenizer) -> str:
+    return _take_prefix(text, budget, tokenizer)
 
 
 def _extract(source: Any, kind: ContentType) -> ExtractionResult:
     return extract_obligations(source, kind)
 
 
-def _coverage(result: CPRGCResult) -> tuple[str | None, str | None]:
+def coverage_ratio(verified: int, discovered: int) -> tuple[str | None, str]:
+    if discovered == 0:
+        return None, "not_applicable"
+    return f"{verified / discovered:.6f}", "applicable"
+
+
+def _coverage(result: CPRGCResult) -> dict[str, Any]:
     report = result.verification_report
-    if report is None:
-        return None, None
-    raw = result.raw_result
+    raw = result.final_result or result.raw_result
     mandatory = sum(item.mandatory for item in raw.obligation_coverage.values())
-    verified = 0
-    for name, item in raw.obligation_coverage.items():
-        verified_item = report.obligation_results.get(name)
-        if verified_item is not None:
-            verified += min(item.mandatory, verified_item.verified)
-    relation_total = sum(item.discovered for item in report.relation_results)
-    relation_verified = sum(item.verified for item in report.relation_results)
-    return ratio(mandatory, verified) if mandatory else "1.000000", ratio(
-        relation_total, relation_verified
-    ) if relation_total else "1.000000"
+    verified_mandatory = 0
+    relation_discovered = 0
+    relation_verified = 0
+    relation_classes: set[str] = set()
+    if report is not None:
+        for name, item in raw.obligation_coverage.items():
+            verified_item = report.obligation_results.get(name)
+            if verified_item is not None:
+                verified_mandatory += min(item.mandatory, verified_item.verified)
+        relation_discovered = sum(item.discovered for item in report.relation_results)
+        relation_verified = sum(item.verified for item in report.relation_results)
+        relation_classes = {
+            item.class_name for item in report.relation_results if item.discovered > 0
+        }
+    relation_nodes = [item for item in result.context_ir.nodes if isinstance(item, RelationNode)]
+    hard_ratio, hard_status = coverage_ratio(verified_mandatory, mandatory)
+    relation_ratio, relation_status = coverage_ratio(relation_verified, relation_discovered)
+    return {
+        "hard_obligation_coverage": hard_ratio,
+        "hard_obligation_coverage_status": hard_status,
+        "relation_coverage": relation_ratio,
+        "relation_coverage_status": relation_status,
+        "mandatory_obligation_count": mandatory,
+        "verified_mandatory_count": verified_mandatory,
+        "discovered_relation_count": relation_discovered,
+        "verified_relation_count": relation_verified,
+        "relation_class_diversity": len(relation_classes),
+        "exact_relation_count": sum(item.exactness.value == "exact" for item in relation_nodes),
+        "inferred_relation_count": sum(
+            item.exactness.value == "inferred" for item in relation_nodes
+        ),
+    }
 
 
 def _cprgc_context(
@@ -274,18 +324,21 @@ def _cprgc_context(
     mode: CPRGCMode,
     *,
     query: str | None = None,
+    tokenizer: Tokenizer,
 ) -> tuple[str, CPRGCResult]:
     original = source.raw_bytes.decode("utf-8")
+    registry = TokenizerRegistry()
+    registry.register(tokenizer)
     result = compress_with_cprgc(
         source,
-        fixture_registry(),
-        tokenizer_identity=Phase6FixtureTokenizer.identity,
+        registry,
+        tokenizer_identity=tokenizer.identity,
         query=query,
         mode=mode,
         extraction=extraction,
         run_id=deterministic_run_id(f"{item.item_id}:{mode.value}"),
         maximum_attempts=3,
-        maximum_final_token_budget=max(_token_count(original), 1),
+        maximum_final_token_budget=max(_token_count(original, tokenizer), 1),
     )
     context = result.context or original
     return context, result
@@ -298,9 +351,12 @@ def _prepared(
     original_count: int,
     budget: int,
     *,
+    tokenizer: Tokenizer,
+    compiler_commit: str,
+    benchmark_runner_commit: str,
     result: CPRGCResult | None = None,
 ) -> PreparedContext:
-    context_count = _token_count(context)
+    context_count = _token_count(context, tokenizer)
     raw_reduction = result.diagnostics.raw_reduction if result is not None else None
     final_reduction = (
         result.diagnostics.final_reduction
@@ -315,13 +371,24 @@ def _prepared(
     status = result.status.value if result is not None else "baseline"
     action = result.final_action if result is not None else FinalAction.EMIT
     certificate_hash = None
-    hard_coverage = None
-    relation_coverage = None
+    coverage: dict[str, Any] = {
+        "hard_obligation_coverage": None,
+        "hard_obligation_coverage_status": "not_applicable",
+        "relation_coverage": None,
+        "relation_coverage_status": "not_applicable",
+        "mandatory_obligation_count": 0,
+        "verified_mandatory_count": 0,
+        "discovered_relation_count": 0,
+        "verified_relation_count": 0,
+        "relation_class_diversity": 0,
+        "exact_relation_count": 0,
+        "inferred_relation_count": 0,
+    }
     warnings: list[str] = []
     if result is not None:
         if result.certificate is not None and hasattr(result.certificate, "certificate_hash"):
             certificate_hash = result.certificate.certificate_hash
-        hard_coverage, relation_coverage = _coverage(result)
+        coverage = _coverage(result)
         warnings = result.warnings
     return PreparedContext(
         item_id=item.item_id,
@@ -330,6 +397,20 @@ def _prepared(
         original_token_count=original_count,
         context_token_count=context_count,
         matched_budget=max(1, budget),
+        tokenizer_identity=TokenizerIdentity.model_validate(
+            tokenizer.identity.model_dump(mode="json")
+        ),
+        metric_source=(
+            BenchmarkMetricSource.FIXTURE_BYTES
+            if tokenizer.identity.implementation == "fixture-only"
+            else BenchmarkMetricSource.CONFIGURED_TOKENIZER
+        ),
+        original_configured_token_count=original_count,
+        context_configured_token_count=context_count,
+        matched_configured_token_budget=max(1, budget),
+        configured_context_reduction=ratio(original_count, context_count),
+        compiler_commit=compiler_commit,
+        benchmark_runner_commit=benchmark_runner_commit,
         requested_reduction=requested_reduction,
         raw_reduction=raw_reduction,
         final_reduction=final_reduction,
@@ -341,8 +422,7 @@ def _prepared(
             if result and result.verification_report
             else "not_run"
         ),
-        hard_obligation_coverage=hard_coverage,
-        relation_coverage=relation_coverage,
+        **coverage,
         fallback=action == FinalAction.FULL_FALLBACK,
         warnings=warnings,
     )
@@ -351,9 +431,16 @@ def _prepared(
 def prepare_contexts(
     items: Iterable[BenchmarkItem],
     *,
+    tokenizer: Tokenizer,
     method_ids: Iterable[str] = DEFAULT_METHOD_IDS,
+    compiler_commit: str | None = None,
+    benchmark_runner_commit: str | None = None,
 ) -> tuple[PreparedContext, ...]:
     selected_methods = tuple(method_ids)
+    resolved_compiler_commit = compiler_commit or _git_commit()
+    resolved_runner_commit = benchmark_runner_commit or _git_commit()
+    registry = TokenizerRegistry()
+    registry.register(tokenizer)
     unknown = sorted(set(selected_methods) - set(METHOD_BY_ID))
     if unknown:
         raise ValueError(f"unknown benchmark methods: {unknown}")
@@ -380,12 +467,12 @@ def prepare_contexts(
             source = source_inputs[source_name]
             extraction = extractions[source_name]
             target_context, target_result = _cprgc_context(
-                item, source, extraction, CPRGCMode.TARGET
+                item, source, extraction, CPRGCMode.TARGET, tokenizer=tokenizer
             )
             aggressive_context, aggressive_result = _cprgc_context(
-                item, source, extraction, CPRGCMode.AGGRESSIVE
+                item, source, extraction, CPRGCMode.AGGRESSIVE, tokenizer=tokenizer
             )
-            original_count = _token_count(source.raw_bytes.decode("utf-8"))
+            original_count = _token_count(source.raw_bytes.decode("utf-8"), tokenizer)
             compression_by_source[source_name] = (
                 target_context,
                 target_result,
@@ -394,12 +481,18 @@ def prepare_contexts(
                 target_result.diagnostics.final_tokens or original_count,
             )
     records: list[PreparedContext] = []
+    prepared_record = partial(
+        _prepared,
+        tokenizer=tokenizer,
+        compiler_commit=resolved_compiler_commit,
+        benchmark_runner_commit=resolved_runner_commit,
+    )
     for item in items:
         source_name = _fixture_name(item)
         source = source_inputs[source_name]
         extraction = extractions[source_name]
         original = source.raw_bytes.decode("utf-8")
-        original_count = _token_count(original)
+        original_count = _token_count(original, tokenizer)
         if needs_target:
             target_context, target_result, aggressive_context, aggressive_result, budget = (
                 compression_by_source[source_name]
@@ -409,35 +502,43 @@ def prepare_contexts(
             aggressive_context, aggressive_result, budget = original, None, original_count
         for method_id in selected_methods:
             if method_id == "full_context":
-                records.append(_prepared(item, method_id, original, original_count, budget))
+                records.append(prepared_record(item, method_id, original, original_count, budget))
             elif method_id == "head_truncation":
                 records.append(
-                    _prepared(
-                        item, method_id, _fallback_context(original, budget), original_count, budget
+                    prepared_record(
+                        item,
+                        method_id,
+                        _fallback_context(original, budget, tokenizer),
+                        original_count,
+                        budget,
                     )
                 )
             elif method_id == "tail_truncation":
                 records.append(
-                    _prepared(
-                        item, method_id, _take_suffix(original, budget), original_count, budget
+                    prepared_record(
+                        item,
+                        method_id,
+                        _take_suffix(original, budget, tokenizer),
+                        original_count,
+                        budget,
                     )
                 )
             elif method_id == "head_tail":
                 records.append(
-                    _prepared(
+                    prepared_record(
                         item,
                         method_id,
-                        _head_tail_context(original, budget),
+                        _head_tail_context(original, budget, tokenizer),
                         original_count,
                         budget,
                     )
                 )
             elif method_id == "lexical_top_k":
                 records.append(
-                    _prepared(
+                    prepared_record(
                         item,
                         method_id,
-                        _lexical_context(original, item.question, budget),
+                        _lexical_context(original, item.question, budget, tokenizer),
                         original_count,
                         budget,
                     )
@@ -447,18 +548,22 @@ def prepare_contexts(
                     run_id=deterministic_run_id(f"{item.item_id}:phase3"),
                     source_id=source.source_id,
                     source_kind=item.source_kind,
-                    tokenizer_id=FIXTURE_TOKENIZER.identity,
+                    tokenizer_id=tokenizer.identity,
                     target_token_budget=budget,
                     compiler_strategy=CompilerStrategy.DETERMINISTIC_EXTRACTIVE,
                 )
-                phase3 = compress_source(request, source, fixture_registry(), extraction)
+                phase3 = compress_source(request, source, registry, extraction)
                 phase3_context = phase3.compressed_text or original
-                records.append(_prepared(item, method_id, phase3_context, original_count, budget))
+                if _token_count(phase3_context, tokenizer) > budget:
+                    phase3_context = _fallback_context(original, budget, tokenizer)
+                records.append(
+                    prepared_record(item, method_id, phase3_context, original_count, budget)
+                )
             elif method_id == "cprgc_target":
                 if target_result is None:
                     raise ValueError("CPRGC target preparation was not requested")
                 records.append(
-                    _prepared(
+                    prepared_record(
                         item,
                         method_id,
                         target_context,
@@ -472,7 +577,7 @@ def prepare_contexts(
                     raise ValueError("CPRGC aggressive preparation was not requested")
                 aggressive_budget = aggressive_result.diagnostics.final_tokens or original_count
                 records.append(
-                    _prepared(
+                    prepared_record(
                         item,
                         method_id,
                         aggressive_context,
@@ -581,6 +686,7 @@ def score_record(
     response: TargetResponse,
     *,
     full_context_correct: bool | None,
+    full_context_input_tokens: int | None = None,
     pricing: PricingConfig | None = None,
     end_to_end_latency_ms: float | None = None,
 ) -> ScoreRecord:
@@ -607,9 +713,16 @@ def score_record(
         original_token_count=prepared.original_token_count,
         context_token_count=prepared.context_token_count,
         input_reduction=ratio(prepared.original_token_count, prepared.context_token_count),
+        configured_context_reduction=prepared.configured_context_reduction,
+        provider_request_input_reduction=provider_request_input_reduction(
+            full_context_input_tokens, response.input_tokens
+        ),
         raw_reduction=prepared.raw_reduction,
         final_reduction=prepared.final_reduction,
         target_latency_ms=response.request_latency_ms,
+        local_compression_latency_ms=prepared.compiler_latency_ms,
+        verification_latency_ms=prepared.verification_latency_ms,
+        recovery_latency_ms=prepared.recovery_latency_ms,
         end_to_end_latency_ms=end_to_end_latency_ms,
         input_cost=input_cost,
         output_cost=output_cost,
@@ -634,7 +747,21 @@ def _request_for(
         maximum_output_tokens=settings.maximum_output_tokens,
         seed=settings.seed,
         timeout_seconds=settings.request_timeout_seconds,
-        metadata={"benchmark_version": BENCHMARK_VERSION, "source_kind": item.source_kind.value},
+        metadata={
+            "benchmark_version": BENCHMARK_VERSION,
+            "source_kind": item.source_kind.value,
+            "tokenizer_identity": canonical_json_bytes(
+                prepared.tokenizer_identity.model_dump(mode="json")
+                if prepared.tokenizer_identity is not None
+                else None
+            ).decode("utf-8"),
+            "compiler_commit": prepared.compiler_commit or "unknown",
+            "benchmark_runner_commit": prepared.benchmark_runner_commit or "unknown",
+            "prompt_hash": sha256_domain(
+                HashDomain.CONTEXT_ARTIFACT,
+                canonical_json_bytes({"system": system, "user": user}),
+            ),
+        },
     )
 
 
@@ -669,6 +796,9 @@ def run_benchmark(
                 record,
                 response,
                 full_context_correct=full_correct.get(record.item_id),
+                full_context_input_tokens=responses[(record.item_id, "full_context")].input_tokens
+                if (record.item_id, "full_context") in responses
+                else None,
                 pricing=pricing,
                 end_to_end_latency_ms=response.request_latency_ms,
             )
@@ -720,6 +850,23 @@ def summarize_scores(scores: Iterable[ScoreRecord]) -> dict[str, Any]:
             "mean_reduction": statistics.fmean(float(item.input_reduction or 0) for item in values)
             if values
             else 0.0,
+            "mean_provider_request_input_reduction": statistics.fmean(
+                float(item.provider_request_input_reduction)
+                for item in valid
+                if item.provider_request_input_reduction is not None
+            )
+            if any(item.provider_request_input_reduction is not None for item in valid)
+            else None,
+            "provider_input_tokens": sum(item.target_response.input_tokens or 0 for item in valid),
+            "provider_cached_input_tokens": sum(
+                item.target_response.cached_input_tokens or 0 for item in valid
+            ),
+            "provider_output_tokens": sum(
+                item.target_response.output_tokens or 0 for item in valid
+            ),
+            "provider_reasoning_tokens": sum(
+                item.target_response.reasoning_tokens or 0 for item in valid
+            ),
             "per_kind": {
                 kind: _kind_metrics(items, full)
                 for (method, kind), items in sorted(by_kind.items())
@@ -786,17 +933,56 @@ def default_pricing(model_id: str = "unconfigured") -> PricingConfig:
     )
 
 
+def filter_items_by_id_file(
+    items: Iterable[BenchmarkItem], item_ids_file: str | Path
+) -> tuple[BenchmarkItem, ...]:
+    requested = [
+        line.strip()
+        for line in Path(item_ids_file).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if len(requested) != len(set(requested)):
+        raise ValueError("item ID file contains duplicates")
+    by_id = {item.item_id: item for item in items}
+    unknown = sorted(set(requested) - set(by_id))
+    if unknown:
+        raise ValueError(f"unknown benchmark item IDs: {unknown}")
+    selected = set(requested)
+    return tuple(item for item in items if item.item_id in selected)
+
+
+def write_artifact_hashes(output_dir: str | Path) -> dict[str, str]:
+    directory = Path(output_dir)
+    hashes = {
+        path.name: f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+        for path in sorted(directory.iterdir(), key=lambda item: item.name)
+        if path.is_file() and path.name != "artifact-hashes.json"
+    }
+    _write_json(directory / "artifact-hashes.json", hashes)
+    return hashes
+
+
 def prepare_artifacts(
     output_dir: str | Path,
     *,
+    tokenizer: Tokenizer,
     items: tuple[BenchmarkItem, ...] | None = None,
     method_ids: Iterable[str] = DEFAULT_METHOD_IDS,
 ) -> dict[str, Any]:
     directory = Path(output_dir)
     selected_methods = tuple(method_ids)
+    if directory.exists() and any(directory.iterdir()):
+        raise FileExistsError(f"benchmark output directory is not empty: {directory}")
     directory.mkdir(parents=True, exist_ok=True)
     benchmark_items = items or build_context_proof_bench()
-    prepared = prepare_contexts(benchmark_items, method_ids=selected_methods)
+    commit = _git_commit()
+    prepared = prepare_contexts(
+        benchmark_items,
+        tokenizer=tokenizer,
+        method_ids=selected_methods,
+        compiler_commit=commit,
+        benchmark_runner_commit=commit,
+    )
     _write_jsonl(directory / "benchmark-items.jsonl", benchmark_items)
     _write_jsonl(directory / "controlled-context-stress.jsonl", build_controlled_context_stress())
     _write_json(
@@ -816,6 +1002,7 @@ def prepare_artifacts(
         item_count=len(benchmark_items),
         method_ids=selected_methods,
         model_id="unconfigured",
+        tokenizer=tokenizer,
         pricing_config=pricing,
     )
     _write_json(directory / "run-manifest.json", run.model_dump(mode="json"))
@@ -855,6 +1042,21 @@ def prepare_artifacts(
         warnings=["Target-model responses absent; downstream accuracy is unmeasured."],
     )
     _write_json(directory / "summary.json", summary.model_dump(mode="json"))
+    (directory / "summary.csv").write_text(
+        "mode,item_count,method_count,expected_request_count\n"
+        f"prepare,{summary.item_count},{summary.method_count},{summary.expected_request_count}\n",
+        encoding="utf-8",
+    )
+    (directory / "benchmark.md").write_text(
+        "# ContextProofBench v1\n\n"
+        f"Mode: prepare\n\nItems: {summary.item_count}\n\n"
+        "Downstream accuracy remains unmeasured.\n",
+        encoding="utf-8",
+    )
+    (directory / "failures.md").write_text(
+        "# Failures\n\nInfrastructure failures: 0\n", encoding="utf-8"
+    )
+    write_artifact_hashes(directory)
     return {"items": benchmark_items, "prepared": prepared, "summary": summary}
 
 
@@ -868,16 +1070,11 @@ def _manifest(
     item_count: int,
     method_ids: tuple[str, ...],
     model_id: str,
+    tokenizer: Tokenizer,
     pricing_config: PricingConfig | None = None,
 ) -> BenchmarkRun:
-    commit = "unknown"
-    try:
-        commit = subprocess.run(
-            ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
-        ).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
-        pass
-    identity = FIXTURE_TOKENIZER.identity
+    commit = _git_commit()
+    identity = tokenizer.identity
     try:
         dirty_state = bool(
             subprocess.run(
@@ -898,6 +1095,13 @@ def _manifest(
         model_id=model_id,
         endpoint_class="openai_compatible",
         tokenizer_identity=TokenizerIdentity.model_validate(identity.model_dump(mode="json")),
+        metric_source=(
+            BenchmarkMetricSource.FIXTURE_BYTES
+            if identity.implementation == "fixture-only"
+            else BenchmarkMetricSource.CONFIGURED_TOKENIZER
+        ),
+        compiler_commit=commit,
+        benchmark_runner_commit=commit,
         item_count=item_count,
         method_ids=list(method_ids),
         request_count=item_count * len(method_ids),
@@ -952,12 +1156,16 @@ __all__ = [
     "build_target_request",
     "default_pricing",
     "deterministic_run_id",
+    "coverage_ratio",
+    "filter_items_by_id_file",
     "prepare_artifacts",
     "prepare_contexts",
+    "provider_request_input_reduction",
     "prompt_for",
     "run_benchmark",
     "score_answer",
     "score_record",
     "summarize_scores",
     "wilson_interval",
+    "write_artifact_hashes",
 ]

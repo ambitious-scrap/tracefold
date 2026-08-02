@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 
 from tracefold.hashing import sha256_domain
-from tracefold.schemas.common import HashDomain
+from tracefold.schemas.common import HashDomain, TokenizerIdentity
 from tracefold.schemas.phase7 import (
     ReplayRecord,
     TargetMode,
@@ -200,6 +200,33 @@ class TargetAdapter:
             return self._failure(
                 request, "REPLAY_MODEL_MISMATCH", "replay model differs from request"
             )
+        if record.benchmark_item_id not in {None, request.benchmark_item_id}:
+            return self._failure(request, "REPLAY_ITEM_MISMATCH", "replay item differs request")
+        if record.method_id not in {None, request.method_id}:
+            return self._failure(request, "REPLAY_METHOD_MISMATCH", "replay method differs request")
+        expected_prompt_hash = request.metadata.get("prompt_hash")
+        if record.prompt_hash not in {None, expected_prompt_hash}:
+            return self._failure(request, "REPLAY_PROMPT_MISMATCH", "replay prompt differs request")
+        expected_tokenizer = request.metadata.get("tokenizer_identity")
+        record_tokenizer = (
+            canonical_json_bytes(record.tokenizer_identity.model_dump(mode="json")).decode("utf-8")
+            if record.tokenizer_identity is not None
+            else None
+        )
+        if record_tokenizer not in {None, expected_tokenizer}:
+            return self._failure(
+                request,
+                "REPLAY_TOKENIZER_MISMATCH",
+                "replay tokenizer differs request",
+            )
+        for field_name, failure_code in (
+            ("compiler_commit", "REPLAY_COMPILER_MISMATCH"),
+            ("benchmark_runner_commit", "REPLAY_RUNNER_MISMATCH"),
+        ):
+            recorded = getattr(record, field_name)
+            expected = request.metadata.get(field_name)
+            if recorded not in {None, expected}:
+                return self._failure(request, failure_code, f"replay {field_name} differs request")
         if record.replay_record_hash != replay_record_hash(record):
             return self._failure(request, "REPLAY_HASH_MISMATCH", "replay record hash mismatch")
         payload = {
@@ -440,6 +467,12 @@ def replay_record_from_response(request: TargetRequest, response: TargetResponse
         "error_code": response.error_code,
         "error_message": response.error_message,
     }
+    tokenizer_payload = request.metadata.get("tokenizer_identity")
+    tokenizer_identity = (
+        TokenizerIdentity.model_validate(json.loads(tokenizer_payload))
+        if isinstance(tokenizer_payload, str) and tokenizer_payload != "null"
+        else None
+    )
     draft = ReplayRecord(
         request_hash=request.request_hash,
         model_id=response.model_id,
@@ -452,6 +485,22 @@ def replay_record_from_response(request: TargetRequest, response: TargetResponse
         response_hash=response_hash(payload),
         generated_at=datetime.now(UTC),
         provider_request_id=response.provider_request_id,
+        benchmark_item_id=request.benchmark_item_id,
+        method_id=request.method_id,
+        prompt_hash=(
+            str(request.metadata["prompt_hash"]) if "prompt_hash" in request.metadata else None
+        ),
+        tokenizer_identity=tokenizer_identity,
+        compiler_commit=(
+            str(request.metadata["compiler_commit"])
+            if "compiler_commit" in request.metadata
+            else None
+        ),
+        benchmark_runner_commit=(
+            str(request.metadata["benchmark_runner_commit"])
+            if "benchmark_runner_commit" in request.metadata
+            else None
+        ),
         replay_record_hash="sha256:" + "0" * 64,
     )
     return draft.model_copy(update={"replay_record_hash": replay_record_hash(draft)})
