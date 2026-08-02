@@ -5,10 +5,11 @@ import { ArchitectureView } from "./components/ArchitectureView";
 import { BenchmarksView } from "./components/BenchmarksView";
 import { CompressView } from "./components/CompressView";
 import { Icon, type IconName } from "./components/Icon";
+import { LandingView } from "./components/LandingView";
 import { ProofView } from "./components/ProofView";
 import { RecoveryView } from "./components/RecoveryView";
 
-type Route = "compress" | "proof" | "recovery" | "benchmarks" | "architecture";
+type Route = "home" | "compress" | "proof" | "recovery" | "benchmarks" | "architecture";
 type LoadState = "loading" | "ready" | "error";
 
 const navItems: { route: Route; label: string; note: string; icon: IconName }[] = [
@@ -119,6 +120,8 @@ export function App() {
     setGuidedStep(nextStep);
   };
 
+  if (route === "home") return <LandingView benchmark={bundle?.benchmark} scenario={scenario ?? undefined} onNavigate={navigate} />;
+
   if (loadState === "loading") return <LoadingShell />;
   if (loadState === "error" || !bundle || !scenario) return <ErrorShell message={loadError ?? "No committed demo bundle found."} retry={() => void load()} />;
 
@@ -129,7 +132,7 @@ export function App() {
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Skip to main content</a>
-    <aside className="side-rail" aria-label="Primary navigation"><div className="brand-lockup"><div className="brand-mark"><span>T</span><span>F</span></div><div><strong>TraceFold</strong><span>Proof workbench</span></div></div><div className="rail-rule" /><nav><span className="rail-label">Navigation</span>{navItems.map((item) => <button className={`nav-item ${route === item.route ? "is-active" : ""}`} type="button" key={item.route} onClick={() => navigate(item.route)} aria-current={route === item.route ? "page" : undefined}><Icon name={item.icon} size={19} /><span><strong>{item.label}</strong><small>{item.note}</small></span></button>)}</nav><div className="rail-footer"><span className="rail-label">Session</span><code>STATIC / V1</code><span className="rail-footnote">No target-model requests in demo mode.</span></div></aside>
+    <aside className="side-rail" aria-label="Primary navigation"><a className="brand-lockup" href="/" onClick={(event) => { event.preventDefault(); navigate("home"); }}><div className="brand-mark"><span>T</span><span>F</span></div><div><strong>TraceFold</strong><span>Proof workbench</span></div></a><div className="rail-rule" /><nav><span className="rail-label">Navigation</span>{navItems.map((item) => <button className={`nav-item ${route === item.route ? "is-active" : ""}`} type="button" key={item.route} onClick={() => navigate(item.route)} aria-current={route === item.route ? "page" : undefined}><Icon name={item.icon} size={19} /><span><strong>{item.label}</strong><small>{item.note}</small></span></button>)}</nav><div className="rail-footer"><span className="rail-label">Session</span><code>STATIC / V1</code><span className="rail-footnote">No target-model requests in demo mode.</span></div></aside>
     <main id="main-content" className="main-shell"><div className="topbar"><div className="topbar__context"><span className="coordinate-cross" aria-hidden="true">+</span><span>TraceFold / {route}</span></div><div className="topbar__actions"><span className={`connection-state ${connected ? "is-connected" : ""}`}><i />{connected ? "Backend connected" : mode === "backend" ? "Backend unavailable" : "Static demo"}</span><button className="guide-button" type="button" onClick={guidedStep === null ? startGuide : nextGuide}><Icon name={guidedStep === null ? "play" : "arrow"} size={15} />{guidedStep === null ? "Start guided demo" : `Next scene · ${guidedStep + 1}/7`}</button></div></div>{guidedStep !== null ? <div className="guide-strip" role="status"><span>Guided demo / Scene {guidedStep + 1}</span><strong>{guideScenes[guidedStep].label}</strong><span>Separate labelled fixtures keep evidence honest.</span></div> : null}
       {route === "compress" ? <CompressView bundle={bundle} scenario={scenario} selectedScenarioId={selectedScenarioId} request={request} busy={busy} connected={connected} usedStaticFallback={usedStaticFallback} error={error} onRequestChange={(patch) => setRequest((current) => ({ ...current, ...patch }))} onScenarioChange={chooseScenario} onCompress={() => void runCompression()} /> : null}
       {route === "proof" ? <ProofView scenario={currentScenario} /> : null}
@@ -141,7 +144,7 @@ export function App() {
   </div>;
 }
 
-function routeFromPath(path: string): Route { const name = path.replace(/^\//, "").split("/")[0] as Route; return navItems.some((item) => item.route === name) ? name : "compress"; }
+function routeFromPath(path: string): Route { const segment = path.replace(/^\//, "").split("/")[0] ?? ""; return segment === "" ? "home" : navItems.some((item) => item.route === segment) ? segment as Route : "home"; }
 
 function LoadingShell() { return <div className="shell-message"><div className="loading-orbit"><span /></div><h1>Loading committed proof artifacts</h1><p>Reading sanitized demo data. No backend request is made.</p></div>; }
 function ErrorShell({ message, retry }: { message: string; retry: () => void }) { return <div className="shell-message shell-message--error"><Icon name="alert" size={26} /><h1>Demo data unavailable</h1><p>{message}</p><button className="primary-button" type="button" onClick={retry}>Try loading again</button></div>; }

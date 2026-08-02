@@ -17,6 +17,14 @@ describe("application routes and primary controls", () => {
     vi.unstubAllGlobals();
   });
 
+  it("renders the landing page and hands off to the workbench", async () => {
+    window.history.replaceState({}, "", "/");
+    render(<App />);
+    expect(screen.getByRole("heading", { name: "Make long context smaller without losing the trail." })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Try the workbench/ }));
+    expect(await screen.findByRole("heading", { name: "Compress long context. Keep proof." })).toBeInTheDocument();
+  });
+
   it("renders every primary route with stable navigation", async () => {
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Compress long context. Keep proof." })).toBeInTheDocument();
