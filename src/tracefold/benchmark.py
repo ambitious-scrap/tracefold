@@ -820,9 +820,11 @@ def summarize_scores(scores: Iterable[ScoreRecord]) -> dict[str, Any]:
     records = tuple(scores)
     by_method: dict[str, list[ScoreRecord]] = defaultdict(list)
     by_kind: dict[tuple[str, str], list[ScoreRecord]] = defaultdict(list)
+    by_answer_type: dict[tuple[str, str], list[ScoreRecord]] = defaultdict(list)
     for record in records:
         by_method[record.method_id].append(record)
         by_kind[(record.method_id, record.source_kind.value)].append(record)
+        by_answer_type[(record.method_id, record.answer_type.value)].append(record)
     full = {
         item.item_id: item.correct
         for item in by_method.get("full_context", [])
@@ -872,6 +874,23 @@ def summarize_scores(scores: Iterable[ScoreRecord]) -> dict[str, Any]:
                 for (method, kind), items in sorted(by_kind.items())
                 if method == method_id
             },
+            "per_answer_type": {
+                answer_type: _kind_metrics(items, full)
+                for (method, answer_type), items in sorted(by_answer_type.items())
+                if method == method_id
+            },
+            "latency_ms": {
+                field.removesuffix("_latency_ms"): _latency_metrics(
+                    [getattr(item, field) for item in values]
+                )
+                for field in (
+                    "target_latency_ms",
+                    "local_compression_latency_ms",
+                    "verification_latency_ms",
+                    "recovery_latency_ms",
+                    "end_to_end_latency_ms",
+                )
+            },
         }
     disagreements: dict[str, dict[str, int]] = {}
     for method_id, values in sorted(by_method.items()):
@@ -881,6 +900,8 @@ def summarize_scores(scores: Iterable[ScoreRecord]) -> dict[str, Any]:
             item for item in values if item.item_id in full and not item.infrastructure_failure
         ]
         disagreements[method_id] = {
+            "both_correct": sum(item.correct and full[item.item_id] for item in pairs),
+            "both_wrong": sum(not item.correct and not full[item.item_id] for item in pairs),
             "compressed_wrong_full_correct": sum(
                 not item.correct and full[item.item_id] for item in pairs
             ),
@@ -890,6 +911,17 @@ def summarize_scores(scores: Iterable[ScoreRecord]) -> dict[str, Any]:
             "ties": sum(item.correct == full[item.item_id] for item in pairs),
         }
     return {"methods": methods, "paired_disagreements": disagreements, "record_count": len(records)}
+
+
+def _latency_metrics(values: Iterable[float | None]) -> dict[str, float | int | None]:
+    samples = sorted(value for value in values if value is not None)
+    if not samples:
+        return {"median": None, "p90": None, "sample_count": 0}
+    return {
+        "median": statistics.median(samples),
+        "p90": samples[math.ceil(len(samples) * 0.9) - 1],
+        "sample_count": len(samples),
+    }
 
 
 def _kind_metrics(values: list[ScoreRecord], full: dict[str, bool]) -> dict[str, Any]:

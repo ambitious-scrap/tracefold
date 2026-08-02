@@ -1,19 +1,31 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import httpx
 import pytest
 
-from tracefold.benchmark import _manifest, _request_for, deterministic_run_id, prepare_contexts
+from tracefold.benchmark import (
+    _manifest,
+    _request_for,
+    deterministic_run_id,
+    prepare_artifacts,
+    prepare_contexts,
+    score_record,
+    summarize_scores,
+)
 from tracefold.phase7_fixtures import build_context_proof_bench
+from tracefold.phase7_report import build_report
 from tracefold.schemas.phase7 import (
     BenchmarkRunMode,
     TargetMode,
     TargetRequest,
+    TargetResponse,
     TargetSettings,
     TargetStatus,
 )
+from tracefold.serialization import canonical_json_bytes
 from tracefold.target import TargetAdapter, build_target_request
 from tracefold.tokenizers import TiktokenTokenizer
 
@@ -87,6 +99,7 @@ def test_disabled_and_replay_modes_never_sleep() -> None:
 def test_retry_after_is_respected_and_provider_secret_is_sanitized() -> None:
     calls = 0
     sleeps: list[float] = []
+    authorization = "Authorization:" + " Bearer"
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal calls
@@ -99,7 +112,7 @@ def test_retry_after_is_respected_and_provider_secret_is_sanitized() -> None:
                 {
                     "error": {
                         "code": "bad_request",
-                        "message": "Authorization: Bearer test-secret rejected",
+                        "message": f"{authorization} test-secret rejected",
                     }
                 }
             ],
@@ -117,7 +130,7 @@ def test_retry_after_is_respected_and_provider_secret_is_sanitized() -> None:
     assert sleeps == [5]
     assert response.retry_count == 1
     assert "test-secret" not in (response.error_message or "")
-    assert response.error_message == "Authorization: Bearer [redacted] rejected"
+    assert response.error_message == f"{authorization} [redacted] rejected"
 
 
 def test_gemini_seed_capability_omits_seed_for_every_request(
@@ -175,3 +188,101 @@ def test_manifest_records_inter_request_delay() -> None:
     assert manifest.inter_request_delay_seconds == 7
     assert manifest.random_seed is None
     assert manifest.target_seed_supported is False
+
+
+def test_phase9_summary_includes_disagreements_answer_types_and_latency() -> None:
+    item = build_context_proof_bench()[0]
+    prepared = prepare_contexts(
+        (item,),
+        tokenizer=TiktokenTokenizer("cl100k_base"),
+        method_ids=("full_context", "cprgc_target"),
+        compiler_commit="compiler-test",
+        benchmark_runner_commit="runner-test",
+    )
+    answer = item.answer_key.accepted_answers[0]
+    if item.answer_key.required_units:
+        answer = f"{answer} {' '.join(item.answer_key.required_units)}"
+    full_response = TargetResponse(
+        request_id=deterministic_run_id("summary-full"),
+        model_id="gemini-test",
+        answer_text=answer,
+        status=TargetStatus.SUCCESS,
+        request_latency_ms=10,
+    )
+    target_response = TargetResponse(
+        request_id=deterministic_run_id("summary-target"),
+        model_id="gemini-test",
+        answer_text="definitely wrong",
+        status=TargetStatus.SUCCESS,
+        request_latency_ms=20,
+    )
+    scores = (
+        score_record(
+            item,
+            prepared[0],
+            full_response,
+            full_context_correct=True,
+            end_to_end_latency_ms=10,
+        ),
+        score_record(
+            item,
+            prepared[1],
+            target_response,
+            full_context_correct=True,
+            end_to_end_latency_ms=20,
+        ),
+    )
+
+    summary = summarize_scores(scores)
+    disagreements = summary["paired_disagreements"]["cprgc_target"]
+    assert disagreements["both_correct"] == 0
+    assert disagreements["both_wrong"] == 0
+    assert disagreements["compressed_wrong_full_correct"] == 1
+    method = summary["methods"]["cprgc_target"]
+    assert item.answer_key.answer_type.value in method["per_answer_type"]
+    assert method["latency_ms"]["target"] == {
+        "median": 20,
+        "p90": 20,
+        "sample_count": 1,
+    }
+
+
+def test_scored_report_writes_incomplete_claim_freeze(tmp_path: Path) -> None:
+    output_dir = tmp_path / "phase9-report"
+    item = build_context_proof_bench()[0]
+    result = prepare_artifacts(
+        output_dir,
+        tokenizer=TiktokenTokenizer("cl100k_base"),
+        items=(item,),
+        method_ids=("full_context", "cprgc_target"),
+    )
+    answer = item.answer_key.accepted_answers[0]
+    if item.answer_key.required_units:
+        answer = f"{answer} {' '.join(item.answer_key.required_units)}"
+    scores = [
+        score_record(
+            item,
+            prepared,
+            TargetResponse(
+                request_id=deterministic_run_id(prepared.method_id),
+                model_id="gemini-2.5-flash-lite",
+                answer_text=answer,
+                status=TargetStatus.SUCCESS,
+            ),
+            full_context_correct=True,
+        )
+        for prepared in result["prepared"]
+    ]
+    (output_dir / "scored-results.jsonl").write_text(
+        "".join(
+            canonical_json_bytes(score.model_dump(mode="json")).decode("utf-8") + "\n"
+            for score in scores
+        ),
+        encoding="utf-8",
+    )
+
+    build_report(output_dir)
+
+    claim_freeze = (output_dir / "claim-freeze.md").read_text(encoding="utf-8")
+    assert "Evidence gate: incomplete" in claim_freeze
+    assert "No downstream-retention claim is made." in claim_freeze
