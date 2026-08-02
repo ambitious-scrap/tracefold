@@ -191,6 +191,12 @@ def _hard(obligation: Obligation) -> bool:
     return obligation.class_name in _HARD_CLASSES
 
 
+def compressor_obligation_is_mandatory(obligation: Obligation) -> bool:
+    """Compressor-domain implementation of the frozen mandatory policy."""
+
+    return _hard(obligation)
+
+
 def _compact_fact_allowed(
     source: SourceArtifact, spans: dict[str, SourceSpan], obligation: Obligation
 ) -> bool:
@@ -593,6 +599,7 @@ def render_node(node: Any) -> str:
 
 __all__ = [
     "COMPONENT_VERSION",
+    "compressor_obligation_is_mandatory",
     "build_context_ir",
     "node_source_spans",
     "render_fact",

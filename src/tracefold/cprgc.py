@@ -13,6 +13,7 @@ import math
 import re
 from collections import Counter, defaultdict
 from collections.abc import Sequence
+from decimal import Decimal
 from typing import Any
 
 from tracefold.certificates import generate_certificate
@@ -21,6 +22,7 @@ from tracefold.compression import build_compressed_source_map
 from tracefold.context_ir import (
     _HARD_CLASSES,
     build_context_ir,
+    node_source_spans,
     render_fact,
     render_node,
     stable_id,
@@ -51,6 +53,8 @@ from tracefold.schemas.phase4 import VerificationReportStatus
 from tracefold.schemas.phase5 import RecoveryRequest
 from tracefold.schemas.phase6 import (
     BudgetAllocation,
+    CertificateDiagnosticStatus,
+    CompactVerificationReport,
     ContextIR,
     CPRGCDiagnostics,
     CPRGCMode,
@@ -68,17 +72,32 @@ from tracefold.schemas.source_map import SourceMap, SourceSpan
 from tracefold.serialization import canonical_json_bytes
 from tracefold.source_maps import SourceMapValidationError, validate_source_map
 from tracefold.sources import normalize_source
-from tracefold.tokenizers import TokenizerRegistry, UnknownTokenizerError
-from tracefold.tokenizers.base import Tokenizer
+from tracefold.tokenizers import (
+    Tokenizer,
+    TokenizerIdentity,
+    TokenizerRegistry,
+    UnknownTokenizerError,
+)
 from tracefold.verifier import VerificationEvidence, verify_certificate
 
 COMPONENT_VERSION = "tracefold.cprgc/1.0.0"
 DEFAULT_RUN_ID = "123e4567-e89b-42d3-a456-426614174000"
-MODE_REDUCTIONS: dict[CPRGCMode, float] = {
-    CPRGCMode.CONSERVATIVE: 0.50,
-    CPRGCMode.TARGET: 0.70,
-    CPRGCMode.AGGRESSIVE: 0.80,
+MODE_REDUCTION_BASIS_POINTS: dict[CPRGCMode, int] = {
+    CPRGCMode.CONSERVATIVE: 5_000,
+    CPRGCMode.TARGET: 7_000,
+    CPRGCMode.AGGRESSIVE: 8_000,
 }
+MODE_REDUCTIONS: dict[CPRGCMode, Decimal] = {
+    mode: Decimal(basis_points) / Decimal(10_000)
+    for mode, basis_points in MODE_REDUCTION_BASIS_POINTS.items()
+}
+
+
+def _mode_budget(original_token_count: int, mode: CPRGCMode) -> int:
+    remaining_basis_points = 10_000 - MODE_REDUCTION_BASIS_POINTS[mode]
+    return max(1, original_token_count * remaining_basis_points // 10_000)
+
+
 BM25_K1 = 1.2
 BM25_B = 0.75
 _TERM_RE = re.compile(r"[\w./:@%+-]+", re.UNICODE)
@@ -213,9 +232,7 @@ def allocate_budget(
         raise ValueError("original_token_count must be non-negative")
     if target_token_budget is not None and target_token_budget <= 0:
         raise ValueError("target_token_budget must be positive")
-    budget = target_token_budget or max(
-        1, math.floor(original_token_count * (1 - MODE_REDUCTIONS[mode]))
-    )
+    budget = target_token_budget or max(1, _mode_budget(original_token_count, mode))
     remaining = max(0, budget - envelope_tokens - mandatory_token_cost - recovery_reserve_tokens)
     query_budget = min(remaining, query_neighborhood_tokens)
     remaining -= query_budget
@@ -382,13 +399,13 @@ def _document_candidates(
         start, end = match.span()
         if text[start:end].strip():
             spans.append(make_source_span(source, start, end, kind="text"))
-    by_normalized: dict[str, list[SourceSpan]] = defaultdict(list)
+    by_exact: dict[str, list[SourceSpan]] = defaultdict(list)
     for span in spans:
-        normalized = re.sub(r"\s+", " ", text[span.char_start : span.char_end]).strip().lower()
-        by_normalized[normalized].append(span)
+        exact = text[span.char_start : span.char_end].replace("\r\n", "\n").replace("\r", "\n")
+        by_exact[exact].append(span)
     result: list[CompressionCandidate] = []
-    for index, (_normalized, group) in enumerate(
-        sorted(by_normalized.items(), key=lambda item: item[1][0].char_start)
+    for index, (_exact, group) in enumerate(
+        sorted(by_exact.items(), key=lambda item: item[1][0].char_start)
     ):
         sample = text[group[0].char_start : group[0].char_end].strip()
         if len(group) > 1:
@@ -594,6 +611,36 @@ def _json_row_span_from_values(source: SourceArtifact, values: Sequence[SourceSp
     return _full_span(source)
 
 
+def _json_pointer_escape(value: str) -> str:
+    return value.replace("~", "~0").replace("/", "~1")
+
+
+def _json_object_arrays(value: Any, path: str = "") -> list[tuple[str, list[dict[str, Any]]]]:
+    result: list[tuple[str, list[dict[str, Any]]]] = []
+    if isinstance(value, list):
+        if value and all(isinstance(item, dict) for item in value):
+            result.append((path, value))
+        for index, item in enumerate(value):
+            result.extend(_json_object_arrays(item, f"{path}/{index}"))
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            result.extend(_json_object_arrays(item, f"{path}/{_json_pointer_escape(key)}"))
+    return result
+
+
+def _json_row_spans(extraction: ExtractionResult, array_path: str, index: int) -> list[SourceSpan]:
+    prefix = f"{array_path}/{index}" if array_path else f"/{index}"
+    return [
+        span
+        for span in extraction.spans
+        if span.json_path and (span.json_path == prefix or span.json_path.startswith(prefix + "/"))
+    ]
+
+
+def _render_indexes(indexes: Sequence[int]) -> str:
+    return ",".join(str(index) for index in indexes)
+
+
 def _json_candidates(
     source: SourceArtifact, extraction: ExtractionResult, tokenizer: Tokenizer, query: str | None
 ) -> list[CompressionCandidate]:
@@ -603,25 +650,7 @@ def _json_candidates(
     except json.JSONDecodeError:
         return []
     result: list[CompressionCandidate] = []
-    row_span_values: defaultdict[int, list[SourceSpan]] = defaultdict(list)
-    for span in extraction.spans:
-        if not span.json_path:
-            continue
-        match = re.search(r"/(?:records|items)/(\d+)(?:/|$)", span.json_path)
-        if match:
-            row_span_values[int(match.group(1))].append(span)
-    if isinstance(value, dict):
-        arrays = [
-            (key, item)
-            for key, item in value.items()
-            if isinstance(item, list) and item and all(isinstance(row, dict) for row in item)
-        ]
-    else:
-        arrays = (
-            [("records", value)]
-            if isinstance(value, list) and all(isinstance(row, dict) for row in value)
-            else []
-        )
+    arrays = _json_object_arrays(value)
     if not arrays:
         compact = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
         return [
@@ -636,13 +665,14 @@ def _json_candidates(
                 compiler_rule="json-compact",
             )
         ]
-    for array_name, rows in arrays:
+    for array_path, rows in arrays:
         keys: list[str] = []
         for row in rows:
             for key in row:
                 if key not in keys:
                     keys.append(key)
-        header = f"@json path=/{array_name} rows={len(rows)} keys={','.join(keys)}"
+        rendered_path = array_path or "/"
+        header = f"@json path={rendered_path} rows={len(rows)} keys={','.join(keys)}"
         result.append(
             _candidate(
                 source,
@@ -652,7 +682,7 @@ def _json_candidates(
                 kind="json_schema",
                 order=5000,
                 mandatory=True,
-                metadata={"json_path": f"/{array_name}", "row_count": len(rows)},
+                metadata={"json_path": rendered_path, "row_count": len(rows)},
                 compiler_rule="json-schema-factored",
             )
         )
@@ -672,12 +702,16 @@ def _json_candidates(
                     source,
                     tokenizer,
                     f"@row {index}|{rendered}",
-                    [_json_row_span_from_values(source, row_span_values[index])],
+                    [
+                        _json_row_span_from_values(
+                            source, _json_row_spans(extraction, array_path, index)
+                        )
+                    ],
                     kind="json_row",
                     order=5100 + index,
                     mandatory=required,
                     metadata={
-                        "json_path": f"/{array_name}/{index}",
+                        "json_path": f"{array_path}/{index}" if array_path else f"/{index}",
                         "row_index": index,
                         "anomaly": anomaly,
                     },
@@ -705,9 +739,11 @@ def _json_candidates(
                 _candidate(
                     source,
                     tokenizer,
-                    f"@group rows={indexes[0]}-{indexes[-1]} count={len(indexes)}|{rendered}",
+                    f"@group rows={_render_indexes(indexes)} count={len(indexes)}|{rendered}",
                     [
-                        _json_row_span_from_values(source, row_span_values[index])
+                        _json_row_span_from_values(
+                            source, _json_row_spans(extraction, array_path, index)
+                        )
                         for index in indexes
                     ],
                     kind="json_aggregate",
@@ -715,7 +751,7 @@ def _json_candidates(
                     metadata={
                         "aggregate": True,
                         "count": len(indexes),
-                        "json_path": f"/{array_name}",
+                        "json_path": rendered_path,
                     },
                     compiler_rule="json-exact-duplicate-group",
                 )
@@ -835,7 +871,9 @@ def _python_candidates(
     for index, node in enumerate(tree.body):
         if not hasattr(node, "lineno"):
             continue
-        start = _line_start(text, node.lineno)
+        decorator_lines = [item.lineno for item in getattr(node, "decorator_list", [])]
+        start_line = min([node.lineno, *decorator_lines])
+        start = _line_start(text, start_line)
         end = _line_end(text, getattr(node, "end_lineno", node.lineno))
         source_span = make_source_span(source, start, end, kind="code_node")
         segment = text[start:end]
@@ -844,14 +882,17 @@ def _python_candidates(
         protected = any(
             start <= left < end or start < right <= end for left, right in protected_ranges
         )
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and not (
-            matched or protected
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            and not (matched or protected)
+            and node.body
+            and node.body[0].lineno > node.lineno
         ):
-            header = text[start : text.find("\n", start) if "\n" in text[start:] else end].rstrip()
-            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-                rendered = f"{header}\n    ..."
-            else:
-                rendered = f"{header}\n    ..."
+            body_line = (
+                node.body[0].lineno if node.body else getattr(node, "end_lineno", node.lineno)
+            )
+            header = text[start : _line_start(text, body_line)].rstrip()
+            rendered = f"{header}\n{' ' * (node.col_offset + 4)}..."
             result.append(
                 _candidate(
                     source,
@@ -860,30 +901,11 @@ def _python_candidates(
                     [source_span],
                     kind="python_skeleton",
                     order=5000 + index,
-                    metadata={"symbol": name, "parseable": True, "synthesized": False},
+                    metadata={"symbol": name, "parseable": True, "synthesized": True},
                     compiler_rule="python-ast-skeleton",
                 )
             )
         else:
-            if protected:
-                header = text[
-                    start : text.find("\n", start) if "\n" in text[start:] else end
-                ].rstrip()
-                rendered = f"{header}\n    ..."
-                result.append(
-                    _candidate(
-                        source,
-                        tokenizer,
-                        rendered,
-                        [source_span],
-                        kind="python_skeleton",
-                        order=5000 + index,
-                        mandatory=True,
-                        metadata={"symbol": name, "parseable": True, "synthesized": False},
-                        compiler_rule="python-protected-skeleton",
-                    )
-                )
-                continue
             result.append(
                 _candidate(
                     source,
@@ -976,6 +998,9 @@ def _omitted_spans(
     selected_ids = {
         span.span_id for candidate in selected for span in candidate.original_source_spans
     }
+    # A span carried inside a larger verbatim emission is present in the output
+    # even though the emitting candidate references a different span id.
+    emitted_ranges = _verbatim_ranges(selected, mandatory_only=False)
     obligation_by_span: defaultdict[str, list[str]] = defaultdict(list)
     relation_by_span: defaultdict[str, list[str]] = defaultdict(list)
     for obligation in extraction.obligations:
@@ -991,6 +1016,8 @@ def _omitted_spans(
         extraction.spans, key=lambda item: (item.char_start, item.char_end, item.span_id)
     ):
         if span.span_id in selected_ids:
+            continue
+        if any(start <= span.char_start and span.char_end <= end for start, end in emitted_ranges):
             continue
         if not obligation_by_span[span.span_id] and not relation_by_span[span.span_id]:
             continue
@@ -1062,7 +1089,7 @@ def _request(
         else ContentType.UNKNOWN,
         tokenizer_id=tokenizer.identity,
         target_token_budget=target_budget,
-        requested_reduction=None if target_budget is not None else MODE_REDUCTIONS[mode],
+        requested_reduction=(None if target_budget is not None else float(MODE_REDUCTIONS[mode])),
         compiler_strategy=CompilerStrategy.DETERMINISTIC_EXTRACTIVE,
         deterministic_options=options,
     )
@@ -1209,6 +1236,41 @@ def _render(candidates: Sequence[CompressionCandidate]) -> str:
     )
 
 
+def _verbatim_ranges(
+    candidates: Sequence[CompressionCandidate],
+    *,
+    mandatory_only: bool = True,
+) -> list[tuple[int, int]]:
+    """Return source ranges a candidate already emits byte-for-byte."""
+
+    ranges = [
+        (span.char_start, span.char_end)
+        for candidate in candidates
+        if candidate.metadata.get("synthesized") is False
+        and (candidate.mandatory or not mandatory_only)
+        for span in candidate.original_source_spans
+    ]
+    return sorted(ranges)
+
+
+def _covered_verbatim(node: Any, ranges: Sequence[tuple[int, int]]) -> bool:
+    """Report whether verbatim output already carries every span of a compact node.
+
+    A synthesized fact or relation line restates evidence that is present exactly,
+    so it is redundant rather than protected and must not consume mandatory budget.
+    """
+
+    if not ranges or not isinstance(node, (FactNode, RelationNode)):
+        return False
+    spans = node_source_spans(node)
+    if not spans:
+        return False
+    return all(
+        any(start <= span.char_start and span.char_end <= end for start, end in ranges)
+        for span in spans
+    )
+
+
 def _select(
     candidates: Sequence[CompressionCandidate],
     mandatory: Sequence[CompressionCandidate],
@@ -1239,6 +1301,28 @@ def _select(
     return selected, True
 
 
+def _finalize_selection(
+    source: SourceArtifact,
+    extraction: ExtractionResult,
+    selected: Sequence[CompressionCandidate],
+    tokenizer: Tokenizer,
+    budget: int,
+) -> tuple[list[CompressionCandidate], list[OmittedSpan], bool]:
+    """Rebuild final markers and enforce budget against final rendered bytes."""
+
+    current = [item for item in selected if item.candidate_kind not in {"omission", "footer"}]
+    for _ in range(len(current) + 2):
+        omitted = _omitted_spans(source, extraction, current)
+        final = [*current, *_footer(source, tokenizer, len(omitted))]
+        if tokenizer.count(_render(final)) <= budget:
+            return final, omitted, True
+        optional = [item for item in current if not item.mandatory]
+        if not optional:
+            return final, omitted, False
+        current.remove(optional[-1])
+    raise AssertionError("bounded final-budget loop exhausted")
+
+
 def _diagnostics(
     raw: RawCompressionResult,
     final: RawCompressionResult | None,
@@ -1247,7 +1331,7 @@ def _diagnostics(
     headers: Sequence[CompressionCandidate],
     closure: ProtectedClosure,
     action: FinalAction,
-    certificate_status: str,
+    certificate_status: CertificateDiagnosticStatus,
     verification_status: str,
     tokenizer: Tokenizer,
     source: SourceArtifact,
@@ -1316,10 +1400,43 @@ def _diagnostics(
     )
 
 
+def _certificate_diagnostic_status(
+    candidate: object | None, report: object | None
+) -> CertificateDiagnosticStatus:
+    if candidate is None:
+        return CertificateDiagnosticStatus.UNAVAILABLE
+    if report is None:
+        return CertificateDiagnosticStatus.GENERATED_UNVERIFIED
+    status = getattr(report, "status", None)
+    if status == VerificationReportStatus.VALID:
+        return CertificateDiagnosticStatus.VERIFIED_VALID
+    if status == VerificationReportStatus.INVALID:
+        return CertificateDiagnosticStatus.VERIFIED_INVALID
+    if status == VerificationReportStatus.UNVERIFIABLE:
+        return CertificateDiagnosticStatus.UNVERIFIABLE
+    return CertificateDiagnosticStatus.VERIFIED_INVALID
+
+
+def _merge_compact_failures(report: Any, compact_report: CompactVerificationReport | None) -> Any:
+    if report is None or compact_report is None or compact_report.status == "valid":
+        return report
+    failures = {item.invariant_id: item for item in report.failed_checks}
+    failures.update({item.invariant_id: item for item in compact_report.failed_invariants})
+    return report.model_copy(
+        update={
+            "status": VerificationReportStatus.INVALID,
+            "failed_checks": [failures[key] for key in sorted(failures)],
+            "recommended_action": FinalAction.RESTORE_SPANS,
+        }
+    )
+
+
 def compress_with_cprgc(
     source: SourceArtifact,
     registry: TokenizerRegistry,
     *,
+    tokenizer_identity: TokenizerIdentity | None = None,
+    tokenizer: Tokenizer | None = None,
     query: str | None = None,
     mode: CPRGCMode = CPRGCMode.TARGET,
     target_token_budget: int | None = None,
@@ -1332,11 +1449,20 @@ def compress_with_cprgc(
 
     if isinstance(mode, str):
         mode = CPRGCMode(mode)
-    try:
-        tokenizer_identity = next(iter(registry._items.values())).identity
-        tokenizer = registry.resolve(tokenizer_identity)
-    except (StopIteration, UnknownTokenizerError) as exc:
-        raise CPRGCExecutionError("CPRGC requires registered tokenizer") from exc
+    if (tokenizer_identity is None) == (tokenizer is None):
+        raise CPRGCExecutionError("CPRGC requires exactly one of tokenizer_identity or tokenizer")
+    if tokenizer is None:
+        assert tokenizer_identity is not None
+        try:
+            tokenizer = registry.resolve(tokenizer_identity)
+        except UnknownTokenizerError as exc:
+            raise CPRGCExecutionError("unknown CPRGC tokenizer identity") from exc
+    else:
+        tokenizer_identity = tokenizer.identity
+        try:
+            registry.resolve(tokenizer_identity)
+        except UnknownTokenizerError:
+            registry.register(tokenizer)
     extraction = extraction or extract_obligations(source, ContentType(source.kind))
     if extraction.coverage.value == "failed":
         raw = _failed_raw(
@@ -1365,6 +1491,7 @@ def compress_with_cprgc(
         if source.kind == "dialogue" and candidate.mandatory
         for relation_id in candidate.relation_ids
     }
+    verbatim_ranges = _verbatim_ranges(content_candidates)
     node_candidates = [
         _node_candidate(
             source,
@@ -1373,20 +1500,24 @@ def compress_with_cprgc(
             order=1000 + index,
             mandatory=(
                 (
-                    node.node_id in closure_ids
-                    and not (
-                        getattr(node, "obligation_ids", [])
-                        and set(getattr(node, "obligation_ids", [])) <= covered_obligation_ids
+                    (
+                        node.node_id in closure_ids
+                        and not (
+                            getattr(node, "obligation_ids", [])
+                            and set(getattr(node, "obligation_ids", [])) <= covered_obligation_ids
+                        )
+                        and not (
+                            isinstance(node, RelationNode)
+                            and node.relation_id in covered_relation_ids
+                        )
                     )
-                    and not (
-                        isinstance(node, RelationNode) and node.relation_id in covered_relation_ids
+                    or (
+                        source.kind == "python"
+                        and isinstance(node, RelationNode)
+                        and not node.mandatory
                     )
                 )
-                or (
-                    source.kind == "python"
-                    and isinstance(node, RelationNode)
-                    and not node.mandatory
-                )
+                and not _covered_verbatim(node, verbatim_ranges)
             ),
         )
         for index, node in enumerate(context_ir.nodes)
@@ -1397,9 +1528,7 @@ def compress_with_cprgc(
     all_candidates = [*headers, *node_candidates, *content_candidates, *footer]
     mandatory = [item for item in all_candidates if item.mandatory]
     original_tokens = tokenizer.count(_text(source))
-    requested_budget = target_token_budget or max(
-        1, math.floor(original_tokens * (1 - MODE_REDUCTIONS[mode]))
-    )
+    requested_budget = target_token_budget or max(1, _mode_budget(original_tokens, mode))
     allocation = allocate_budget(
         original_tokens,
         mode=mode,
@@ -1419,6 +1548,11 @@ def compress_with_cprgc(
         ),
     )
     selected, fits = _select(all_candidates, mandatory, requested_budget, tokenizer, query)
+    omitted: list[OmittedSpan] = []
+    if fits:
+        selected, omitted, fits = _finalize_selection(
+            source, extraction, selected, tokenizer, requested_budget
+        )
     if not fits:
         raw = RawCompressionResult(
             run_id=request.run_id,
@@ -1449,7 +1583,7 @@ def compress_with_cprgc(
             optional_evidence_tokens=0,
             envelope_tokens=tokenizer.count(_render(headers)),
             omitted_tokens=0,
-            certificate_status="not_available",
+            certificate_status=CertificateDiagnosticStatus.UNAVAILABLE,
             verification_status="incompressible",
             recovery_action=FinalAction.EXPAND_BUDGET,
             restored_tokens=0,
@@ -1459,6 +1593,7 @@ def compress_with_cprgc(
             status=CPRGCStatus.INCOMPRESSIBLE,
             final_action=FinalAction.EXPAND_BUDGET,
             context="",
+            tokenizer_identity=tokenizer.identity,
             context_ir=context_ir,
             graph=graph,
             protected_closure=closure,
@@ -1470,11 +1605,7 @@ def compress_with_cprgc(
             diagnostics=diagnostics,
             warnings=["mandatory closure exceeds requested budget"],
         )
-    # Footer contains deterministic omission count; rebuild it after selecting
-    # optional evidence so marker cost is included in every measured output.
-    selected = [item for item in selected if item.candidate_kind not in {"omission", "footer"}]
-    omitted = _omitted_spans(source, extraction, selected)
-    selected.extend(_footer(source, tokenizer, len(omitted)))
+    # _finalize_selection already rebuilt and counted final omission/footer markers.
     all_candidates = [
         item for item in all_candidates if item.candidate_kind not in {"omission", "footer"}
     ]
@@ -1539,6 +1670,7 @@ def compress_with_cprgc(
         compact_report = verify_compact_context(
             source, extraction, context_ir, output, source_map, query=query
         )
+        report = _merge_compact_failures(report, compact_report)
     except (ValueError, SourceMapValidationError, UnknownTokenizerError) as exc:
         raw = _failed_raw(request, source, tokenizer, type(exc).__name__)
         candidate = None
@@ -1595,7 +1727,38 @@ def compress_with_cprgc(
                 warnings.append(type(exc).__name__)
                 status = CPRGCStatus.FAILED
                 final_action = FinalAction.FULL_FALLBACK
-        else:
+    else:
+        status = CPRGCStatus.VERIFIED_COMPRESSED
+        final_action = FinalAction.EMIT
+
+    final_compact_report = compact_report
+    if (
+        recovery_result is not None
+        and final_result is not None
+        and final_result.source_map is not None
+        and final_result.compressed_text is not None
+    ):
+        # Recovery recompiles through the query-independent Phase 3 compressor, so its
+        # artifact and source map are bound to the empty query. The compact verifier must
+        # check the artifact that is actually emitted against the binding it carries,
+        # otherwise every query-driven recovery reports a spurious query mismatch.
+        recovered_query = query if final_result.component_version == COMPONENT_VERSION else None
+        recovered_ir = (
+            context_ir
+            if recovered_query == query
+            else build_context_ir(source, extraction, tokenizer)
+        )
+        final_compact_report = verify_compact_context(
+            source,
+            extraction,
+            recovered_ir,
+            final_result.compressed_text,
+            final_result.source_map,
+            query=recovered_query,
+        )
+        final_report = _merge_compact_failures(final_report, final_compact_report)
+        if final_compact_report.status != "valid" and final_action != FinalAction.FULL_FALLBACK:
+            warnings.extend(item.code for item in final_compact_report.failed_invariants)
             status = CPRGCStatus.FAILED
             final_action = FinalAction.FULL_FALLBACK
     diagnostics = _diagnostics(
@@ -1606,7 +1769,7 @@ def compress_with_cprgc(
         headers,
         closure,
         final_action,
-        "valid" if final_candidate is not None else "failed",
+        _certificate_diagnostic_status(final_candidate, final_report),
         final_report.status.value if final_report is not None else "failed",
         tokenizer,
         source,
@@ -1621,6 +1784,7 @@ def compress_with_cprgc(
             if final_result is not None
             else ""
         ),
+        tokenizer_identity=tokenizer.identity,
         context_ir=context_ir,
         graph=graph,
         protected_closure=closure,
@@ -1628,6 +1792,8 @@ def compress_with_cprgc(
         final_result=final_result,
         certificate=final_candidate,
         verification_report=final_report,
+        compact_verification_report=final_compact_report,
+        failed_invariants=(final_report.failed_checks if final_report is not None else []),
         recovery_result=recovery_result,
         diagnostics=diagnostics,
         warnings=sorted(set(warnings)),

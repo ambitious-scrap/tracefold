@@ -71,6 +71,12 @@ from tracefold.schemas.phase7 import (
     UsageAccounting,
     UsageSource,
 )
+from tracefold.schemas.phase7r import (
+    PublicCompressionRequest,
+    PublicCompressionResponse,
+    RecoverySummary,
+    SourceMapSummary,
+)
 from tracefold.schemas.source import SourceInput, SourceManifest, SourceManifestEntry
 from tracefold.schemas.source_map import SourceMap
 
@@ -144,4 +150,8 @@ __all__ = [
     "TargetStatus",
     "UsageAccounting",
     "UsageSource",
+    "PublicCompressionRequest",
+    "PublicCompressionResponse",
+    "RecoverySummary",
+    "SourceMapSummary",
 ]

@@ -4,14 +4,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from statistics import fmean
 
 from tracefold.cprgc import compress_with_cprgc
 from tracefold.phase6_fixtures import long_fixture_inputs
-from tracefold.schemas.phase6 import CPRGCMode, CPRGCResult
+from tracefold.schemas.phase6 import CPRGCMode, CPRGCResult, RelationNode
 from tracefold.serialization import canonical_json_bytes
 from tracefold.sources import ingest_source
-from tracefold.tokenizers import TokenizerIdentity, TokenizerRegistry
+from tracefold.tokenizers import (
+    FixtureByteTokenizer,
+    Tokenizer,
+    TokenizerRegistry,
+    resolve_tokenizer,
+)
 
 COMPRESSIBLE_FIXTURES = ("document", "dialogue", "json", "logs", "python")
 FIXTURE_QUERIES = {
@@ -23,21 +29,8 @@ FIXTURE_QUERIES = {
 }
 
 
-class Phase6FixtureTokenizer:
+class Phase6FixtureTokenizer(FixtureByteTokenizer):
     """Byte tokenizer frozen for local structural gates, never production use."""
-
-    identity = TokenizerIdentity(
-        implementation="fixture",
-        identifier="fixture",
-        revision="1",
-        configuration_hash="sha256:" + "a" * 64,
-    )
-
-    def encode(self, text: str) -> list[int]:
-        return list(text.encode("utf-8"))
-
-    def count(self, text: str) -> int:
-        return len(self.encode(text))
 
 
 def fixture_registry() -> TokenizerRegistry:
@@ -60,21 +53,43 @@ def _coverage(result: CPRGCResult) -> tuple[str | None, str | None]:
     relation_discovered = sum(item.discovered for item in report.relation_results)
     relation_verified = sum(item.verified for item in report.relation_results)
     hard = 1.0 if mandatory == 0 else verified_mandatory / mandatory
-    relations = 1.0 if relation_discovered == 0 else relation_verified / relation_discovered
-    return f"{hard:.6f}", f"{relations:.6f}"
+    relations = None if relation_discovered == 0 else relation_verified / relation_discovered
+    return f"{hard:.6f}", None if relations is None else f"{relations:.6f}"
 
 
-def _fixture_record(name: str, mode: CPRGCMode) -> dict[str, object]:
+def _fixture_record(
+    name: str,
+    mode: CPRGCMode,
+    *,
+    tokenizer: Tokenizer | None = None,
+    reduction_label: str = "fixture_byte_reduction",
+) -> dict[str, object]:
     source = ingest_source(long_fixture_inputs()[name])
+    selected_tokenizer = tokenizer or Phase6FixtureTokenizer()
+    registry = TokenizerRegistry()
+    registry.register(selected_tokenizer)
     result = compress_with_cprgc(
         source,
-        fixture_registry(),
+        registry,
+        tokenizer_identity=selected_tokenizer.identity,
         mode=mode,
     )
     diagnostics = result.diagnostics
     hard_coverage, relation_coverage = _coverage(result)
     report = result.verification_report
     recovery = result.recovery_result
+    relation_discovered = (
+        sum(item.discovered for item in report.relation_results) if report is not None else 0
+    )
+    relation_verified = (
+        sum(item.verified for item in report.relation_results) if report is not None else 0
+    )
+    relation_classes = (
+        len({item.class_name for item in report.relation_results if item.discovered})
+        if report is not None
+        else 0
+    )
+    relation_nodes = [item for item in result.context_ir.nodes if isinstance(item, RelationNode)]
     source_map_value = (
         report.source_map_coverage.value
         if report is not None and report.source_map_coverage is not None
@@ -84,6 +99,8 @@ def _fixture_record(name: str, mode: CPRGCMode) -> dict[str, object]:
         "fixture": name,
         "source_kind": source.kind,
         "mode": mode.value,
+        "tokenizer_identity": selected_tokenizer.identity.model_dump(mode="json"),
+        "reduction_metric": reduction_label,
         "query_conditioned": False,
         "status": result.status.value,
         "original_tokens": diagnostics.original_tokens,
@@ -106,6 +123,16 @@ def _fixture_record(name: str, mode: CPRGCMode) -> dict[str, object]:
         "final_verification_status": report.status.value if report is not None else "not_run",
         "hard_obligation_coverage": hard_coverage,
         "required_relation_coverage": relation_coverage,
+        "required_relation_coverage_status": (
+            "not_applicable" if relation_discovered == 0 else "applicable"
+        ),
+        "discovered_relation_count": relation_discovered,
+        "verified_relation_count": relation_verified,
+        "relation_class_diversity": relation_classes,
+        "exact_relation_count": sum(item.exactness.value == "exact" for item in relation_nodes),
+        "inferred_relation_count": sum(
+            item.exactness.value == "inferred" for item in relation_nodes
+        ),
         "source_map_coverage": source_map_value,
         "recovery_action": result.final_action.value,
         "recovery_attempts": len(recovery.attempts) if recovery is not None else 0,
@@ -116,7 +143,12 @@ def _fixture_record(name: str, mode: CPRGCMode) -> dict[str, object]:
 
 def _dense_record() -> dict[str, object]:
     source = ingest_source(long_fixture_inputs()["dense"])
-    result = compress_with_cprgc(source, fixture_registry(), mode=CPRGCMode.AGGRESSIVE)
+    result = compress_with_cprgc(
+        source,
+        fixture_registry(),
+        tokenizer_identity=Phase6FixtureTokenizer.identity,
+        mode=CPRGCMode.AGGRESSIVE,
+    )
     return {
         "fixture": "dense",
         "source_kind": source.kind,
@@ -136,9 +168,7 @@ def _dense_record() -> dict[str, object]:
     }
 
 
-def build_report() -> dict[str, object]:
-    target = [_fixture_record(name, CPRGCMode.TARGET) for name in COMPRESSIBLE_FIXTURES]
-    aggressive = [_fixture_record(name, CPRGCMode.AGGRESSIVE) for name in COMPRESSIBLE_FIXTURES]
+def _target_gate(target: list[dict[str, object]]) -> tuple[dict[str, bool], list[float]]:
     reductions = [
         float(value) for item in target if isinstance((value := item["final_reduction"]), str)
     ]
@@ -156,9 +186,44 @@ def build_report() -> dict[str, object]:
         "required_relation_coverage_complete": all(
             item["required_relation_coverage"] == "1.000000" for item in target
         ),
+        "nonzero_relation_instances": sum(
+            int(str(item["discovered_relation_count"])) for item in target
+        )
+        > 0,
+        "multiple_relation_classes": sum(
+            int(str(item["relation_class_diversity"])) for item in target
+        )
+        >= 2,
         "source_maps_complete": all(item["source_map_coverage"] == "1.000000" for item in target),
     }
     target_gate["passed"] = all(target_gate.values())
+    return target_gate, reductions
+
+
+def build_report() -> dict[str, object]:
+    target = [_fixture_record(name, CPRGCMode.TARGET) for name in COMPRESSIBLE_FIXTURES]
+    aggressive = [_fixture_record(name, CPRGCMode.AGGRESSIVE) for name in COMPRESSIBLE_FIXTURES]
+    target_gate, reductions = _target_gate(target)
+    backend = os.getenv("TRACEFOLD_TOKENIZER_BACKEND")
+    encoding = os.getenv("TRACEFOLD_TOKENIZER_ENCODING")
+    configured_target: list[dict[str, object]] | None = None
+    configured_gate: dict[str, bool] | None = None
+    configured_mean: str | None = None
+    configured_identity: dict[str, str] | None = None
+    if backend and encoding and backend != "fixture-only":
+        configured_tokenizer = resolve_tokenizer(backend, encoding)
+        configured_target = [
+            _fixture_record(
+                name,
+                CPRGCMode.TARGET,
+                tokenizer=configured_tokenizer,
+                reduction_label="configured_tokenizer_reduction",
+            )
+            for name in COMPRESSIBLE_FIXTURES
+        ]
+        configured_gate, configured_reductions = _target_gate(configured_target)
+        configured_mean = f"{fmean(configured_reductions):.6f}"
+        configured_identity = configured_tokenizer.identity.model_dump(mode="json")
     payload: dict[str, object] = {
         "report_version": "1.0.0",
         "algorithm": "CPRGC",
@@ -167,6 +232,12 @@ def build_report() -> dict[str, object]:
         "target": target,
         "target_mean_final_reduction": f"{fmean(reductions):.6f}",
         "target_gate": target_gate,
+        "fixture_byte_reduction": target,
+        "configured_tokenizer": configured_identity,
+        "configured_tokenizer_reduction": configured_target,
+        "configured_tokenizer_mean_final_reduction": configured_mean,
+        "configured_tokenizer_gate": configured_gate,
+        "official_token_gate_measured": configured_target is not None,
         "aggressive": aggressive,
         "incompressible": _dense_record(),
     }

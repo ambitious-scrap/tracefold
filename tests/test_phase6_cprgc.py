@@ -55,6 +55,7 @@ def target_cases() -> dict[str, FixtureCase]:
         result = cprgc.compress_with_cprgc(
             source,
             fixture_registry(),
+            tokenizer_identity=Phase6FixtureTokenizer.identity,
             extraction=extraction,
         )
         cases[name] = FixtureCase(source, extraction, result)
@@ -151,6 +152,7 @@ def test_query_scoring_recognizes_exact_tokens_and_binds_hash(
     result = cprgc.compress_with_cprgc(
         case.source,
         fixture_registry(),
+        tokenizer_identity=Phase6FixtureTokenizer.identity,
         query=FIXTURE_QUERIES["document"],
         extraction=case.extraction,
     )
@@ -183,7 +185,7 @@ def test_budget_modes_precedence_redistribution_and_incompressibility() -> None:
     )
     assert conservative.requested_token_budget == 500
     assert target.requested_token_budget == 300
-    assert aggressive.requested_token_budget == 199
+    assert aggressive.requested_token_budget == 200
     assert explicit.requested_token_budget == 333
     assert explicit.query_neighborhood_tokens == 30
     assert explicit.anomaly_tokens == 40
@@ -231,7 +233,11 @@ def test_target_fixture_gate_and_content_compilers(
     assert "count=120" in target_cases["logs"].result.context
     assert "first=2026-08-01T00:00:00" in target_cases["logs"].result.context
     assert "predecessor=E41" in target_cases["logs"].result.context
-    assert "G=attempts >= MAX_RETRIES@transfer" in target_cases["python"].result.context
+    # Protected code is carried verbatim, so the guard and exception path appear as
+    # source rather than as a redundant compact-fact restatement.
+    python_context = target_cases["python"].result.context
+    assert "if attempts >= MAX_RETRIES:" in python_context
+    assert "raise PermissionError('external transfer prohibited')" in python_context
 
     python_case = target_cases["python"]
     python_map = python_case.result.raw_result.source_map
@@ -364,6 +370,7 @@ def test_dense_input_and_fallback_schema_never_claim_false_savings(
     result = cprgc.compress_with_cprgc(
         dense,
         fixture_registry(),
+        tokenizer_identity=Phase6FixtureTokenizer.identity,
         mode=CPRGCMode.AGGRESSIVE,
     )
     assert result.status == CPRGCStatus.INCOMPRESSIBLE
@@ -392,6 +399,7 @@ def test_cprgc_outputs_are_byte_deterministic(
     second = cprgc.compress_with_cprgc(
         first.source,
         fixture_registry(),
+        tokenizer_identity=Phase6FixtureTokenizer.identity,
         extraction=first.extraction,
     )
     assert canonical_json_bytes(first.result.model_dump(mode="json")) == canonical_json_bytes(

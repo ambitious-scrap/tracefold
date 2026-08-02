@@ -22,7 +22,7 @@ from tracefold.cprgc import compress_with_cprgc
 from tracefold.extractors import extract_obligations
 from tracefold.hashing import sha256_domain
 from tracefold.phase6_fixtures import long_fixture_inputs
-from tracefold.phase6_report import fixture_registry
+from tracefold.phase6_report import Phase6FixtureTokenizer, fixture_registry
 from tracefold.phase7_fixtures import build_context_proof_bench, build_controlled_context_stress
 from tracefold.schemas.common import FinalAction, HashDomain, TokenizerIdentity
 from tracefold.schemas.phase2 import ContentType, ExtractionResult
@@ -123,9 +123,7 @@ METHODS = (
 )
 METHOD_BY_ID = {item.method_id: item for item in METHODS}
 _FIXTURE_REGISTRY = fixture_registry()
-FIXTURE_TOKENIZER = _FIXTURE_REGISTRY.resolve(
-    next(iter(_FIXTURE_REGISTRY._items.values())).identity
-)
+FIXTURE_TOKENIZER = _FIXTURE_REGISTRY.resolve(Phase6FixtureTokenizer.identity)
 
 
 def deterministic_run_id(label: str) -> str:
@@ -281,6 +279,7 @@ def _cprgc_context(
     result = compress_with_cprgc(
         source,
         fixture_registry(),
+        tokenizer_identity=Phase6FixtureTokenizer.identity,
         query=query,
         mode=mode,
         extraction=extraction,

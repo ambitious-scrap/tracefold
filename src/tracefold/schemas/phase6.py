@@ -8,12 +8,19 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from tracefold.schemas.certificate import PreservationCertificate
-from tracefold.schemas.common import FinalAction, HashValue, Ratio, StrictModel
+from tracefold.schemas.common import (
+    FailedInvariant,
+    FinalAction,
+    HashValue,
+    Ratio,
+    StrictModel,
+)
 from tracefold.schemas.phase2 import ContentType, RelationExactness
 from tracefold.schemas.phase3 import RawCompressionResult
 from tracefold.schemas.phase4 import CertificateCandidate, VerificationReport
 from tracefold.schemas.phase5 import RecoveryResult
 from tracefold.schemas.source_map import SourceSpan
+from tracefold.tokenizers import TokenizerIdentity
 
 
 class CPRGCMode(StrEnum):
@@ -28,6 +35,14 @@ class CPRGCStatus(StrEnum):
     VERIFIED_FALLBACK = "verified_fallback"
     INCOMPRESSIBLE = "incompressible"
     FAILED = "failed"
+
+
+class CertificateDiagnosticStatus(StrEnum):
+    UNAVAILABLE = "unavailable"
+    GENERATED_UNVERIFIED = "generated_unverified"
+    VERIFIED_VALID = "verified_valid"
+    VERIFIED_INVALID = "verified_invalid"
+    UNVERIFIABLE = "unverifiable"
 
 
 class IRNodeKind(StrEnum):
@@ -257,12 +272,27 @@ class CPRGCDiagnostics(StrictModel):
     optional_evidence_tokens: int = Field(ge=0)
     envelope_tokens: int = Field(ge=0)
     omitted_tokens: int = Field(ge=0)
-    certificate_status: str = Field(min_length=1)
+    certificate_status: CertificateDiagnosticStatus
     verification_status: str = Field(min_length=1)
     recovery_action: FinalAction
     restored_tokens: int = Field(ge=0)
     representation_choices: list[RepresentationChoice] = Field(default_factory=list)
     budget_allocation: BudgetAllocation
+
+    @model_validator(mode="after")
+    def certificate_verification_agrees(self) -> CPRGCDiagnostics:
+        if (
+            self.certificate_status == CertificateDiagnosticStatus.VERIFIED_VALID
+            and self.verification_status != "valid"
+        ):
+            raise ValueError("verified-valid certificate requires valid verification")
+        if (
+            self.certificate_status == CertificateDiagnosticStatus.VERIFIED_INVALID
+            and self.verification_status == "valid"
+        ):
+            raise ValueError("verified-invalid certificate cannot have valid verification")
+        return self
+
     latency_ms: dict[str, float] = Field(default_factory=dict)
 
 
@@ -276,6 +306,7 @@ class CompactVerificationReport(StrictModel):
     source_map_valid: bool
     parseable: bool | None
     failed_checks: list[str] = Field(default_factory=list)
+    failed_invariants: list[FailedInvariant] = Field(default_factory=list)
     component_version: str = Field(min_length=1)
 
 
@@ -283,6 +314,7 @@ class CPRGCResult(StrictModel):
     status: CPRGCStatus
     final_action: FinalAction
     context: str
+    tokenizer_identity: TokenizerIdentity
     context_ir: ContextIR
     graph: RelationGraph
     protected_closure: ProtectedClosure
@@ -290,6 +322,8 @@ class CPRGCResult(StrictModel):
     final_result: RawCompressionResult | None
     certificate: CertificateCandidate | PreservationCertificate | None
     verification_report: VerificationReport | None
+    compact_verification_report: CompactVerificationReport | None = None
+    failed_invariants: list[FailedInvariant] = Field(default_factory=list)
     recovery_result: RecoveryResult | None
     diagnostics: CPRGCDiagnostics
     warnings: list[str] = Field(default_factory=list)
@@ -305,6 +339,7 @@ class CPRGCResult(StrictModel):
 __all__ = [
     "AggregateNode",
     "BudgetAllocation",
+    "CertificateDiagnosticStatus",
     "CPRGCMode",
     "CPRGCResult",
     "CPRGCStatus",

@@ -1,9 +1,12 @@
-from fastapi import FastAPI, status
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException
 
 from tracefold import SCHEMA_VERSION, __version__
-from tracefold.schemas.api import CompressionRequest
+from tracefold.cprgc import CPRGCExecutionError
 from tracefold.schemas.common import StrictModel
+from tracefold.schemas.phase7r import PublicCompressionRequest, PublicCompressionResponse
+from tracefold.service import compress_public
+from tracefold.sources import SourceNormalizationError
+from tracefold.tokenizers import TokenizerConfigurationError
 
 app = FastAPI(title="TraceFold", version=__version__)
 
@@ -28,13 +31,9 @@ def version() -> VersionResponse:
     return VersionResponse(package_version=__version__, schema_version=SCHEMA_VERSION)
 
 
-@app.post("/v1/compress")
-def compress(_: CompressionRequest) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        content={
-            "code": "PHASE_1_NOT_IMPLEMENTED",
-            "message": "compression is not implemented in Phase 1",
-            "run_id": None,
-        },
-    )
+@app.post("/v1/compress", response_model=PublicCompressionResponse)
+def compress(request: PublicCompressionRequest) -> PublicCompressionResponse:
+    try:
+        return compress_public(request)
+    except (TokenizerConfigurationError, SourceNormalizationError, CPRGCExecutionError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None

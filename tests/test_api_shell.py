@@ -11,37 +11,18 @@ def test_health_and_version() -> None:
     assert client.get("/version").status_code == 200
 
 
-def test_compress_is_explicitly_unimplemented() -> None:
+def test_compress_is_runnable() -> None:
     request = {
-        "sources": [
-            {
-                "input_ordinal": 0,
-                "kind": "text",
-                "authority": "user",
-                "media_type": "text/plain",
-                "text": "fixture",
-                "bytes_base64": None,
-                "file_path": None,
-                "message_id": None,
-                "role": None,
-            }
-        ],
-        "query": None,
-        "target_reduction": None,
-        "target_token_budget": 40,
-        "mode": "safe",
-        "content_type": "text/plain",
-        "target_tokenizer": {
-            "implementation": "fixture",
-            "identifier": "fixture",
-            "revision": "1",
-            "configuration_hash": "sha256:" + "a" * 64,
-        },
-        "return_provenance": True,
-        "return_certificate": True,
+        "source_text": "Boilerplate. Boilerplate. timeout = 30 seconds.",
+        "source_kind": "document",
+        "tokenizer_backend": "fixture-only",
+        "tokenizer_encoding": "utf8-byte",
     }
     client = TestClient(app)
     assert client.post("/v1/compress", json={}).status_code == 422
     response = client.post("/v1/compress", json=request)
-    assert response.status_code == 501
-    assert response.json()["code"] == "PHASE_1_NOT_IMPLEMENTED"
+    assert response.status_code == 200
+    assert response.json()["status"] == "incompressible"
+    assert response.json()["tokenizer_identity"]["implementation"] == "fixture-only"
+    request["tokenizer_backend"] = "missing"
+    assert client.post("/v1/compress", json=request).status_code == 422

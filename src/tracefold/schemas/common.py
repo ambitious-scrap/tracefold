@@ -90,3 +90,9 @@ class FailedInvariant(StrictModel):
     source_span_ids: list[str]
     candidate_span_ids: list[str]
     recovery_hint: str
+    source_id: str | None = None
+    obligation_ids: list[str] = Field(default_factory=list)
+    relation_ids: list[str] = Field(default_factory=list)
+    expected_condition: str | None = None
+    observed_condition: str | None = None
+    verifier_rule_version: str | None = None

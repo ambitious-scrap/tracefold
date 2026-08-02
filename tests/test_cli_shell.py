@@ -9,7 +9,7 @@ def test_cli_help_and_version() -> None:
     assert runner.invoke(app, ["version"]).output.strip() == "0.1.0"
 
 
-def test_compress_refuses_future_behavior() -> None:
-    result = CliRunner().invoke(app, ["compress"])
-    assert result.exit_code == 3
-    assert "PHASE_1_NOT_IMPLEMENTED" in result.output
+def test_compress_help_is_runnable() -> None:
+    result = CliRunner().invoke(app, ["compress", "--help"])
+    assert result.exit_code == 0
+    assert "--tokenizer-backend" in result.output

@@ -20,3 +20,13 @@ class TokenizerRegistry:
             return self._items[identity.model_dump_json()]
         except KeyError as exc:
             raise UnknownTokenizerError(identity.model_dump_json()) from exc
+
+    def identities(self) -> tuple[TokenizerIdentity, ...]:
+        """Return registered identities without exposing registry storage."""
+
+        return tuple(
+            sorted(
+                (item.identity for item in self._items.values()),
+                key=lambda item: item.model_dump_json(),
+            )
+        )
