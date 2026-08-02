@@ -1803,11 +1803,14 @@ def compress_source(
                 warnings=_warning_from_extraction(extraction),
                 component_version=COMPONENT_VERSION,
             )
+        force_full = request.deterministic_options.get("force_full") is True
+        if force_full:
+            selected = [_candidate_for_full_source(source, extraction, tokenizer)] if text else []
+            output_text = text
         _assert_preserved(extraction, selected)
         if extraction.content_type == ContentType.PYTHON:
             ast.parse(output_text, filename=source.file_path or "<tracefold>")
         output_tokens = tokenizer.count(output_text)
-        force_full = request.deterministic_options.get("force_full") is True
         if force_full or output_tokens >= original_tokens:
             if text:
                 full = _candidate_for_full_source(source, extraction, tokenizer)

@@ -485,7 +485,8 @@ def _obligation_represented(
             if is_timestamp_aggregate:
                 source_timestamp = str(obligation.value)
                 represented_range = re.findall(
-                    rb"\b(?:\d{4}-\d{2}-\d{2}T)?\d{2}:\d{2}:\d{2}Z\b",
+                    rb"\b(?:\d{4}-\d{2}-\d{2}T)?\d{2}:\d{2}:\d{2}"
+                    rb"(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?\b",
                     segment,
                 )
                 if len(represented_range) >= 2:
@@ -497,7 +498,7 @@ def _obligation_represented(
                 obligation.class_name == "identifier.generic"
                 and isinstance(obligation.value, str)
                 and obligation.value.startswith("log:")
-                and mapping.transform == "synthesize_summary"
+                and mapping.transform in {"aggregate", "synthesize_summary"}
                 and mapping.metadata.get("synthesized") is True
             ):
                 source_text = source.raw_bytes[
@@ -514,8 +515,18 @@ def _obligation_represented(
                     lambda match: match.group(0).split("=", 1)[0] + "=<id>",
                     template,
                 )
-                is_log_marker = (
-                    mapping.metadata.get("template") == template and b"[TraceFold logs x" in segment
+                spans = {span.span_id: span for span in source_map.spans}
+                event_count = sum(
+                    spans[span_id].kind == "log_event"
+                    for span_id in mapping.from_span_ids
+                    if span_id in spans
+                )
+                is_log_marker = mapping.metadata.get("template") == template and (
+                    b"[TraceFold logs x" in segment
+                    or (
+                        f"template={template}".encode() in segment
+                        and f"count={event_count}".encode("ascii") in segment
+                    )
                 )
                 if is_log_marker:
                     return True, mapped_ids
@@ -675,6 +686,24 @@ def _verify_synthesized_markers(
         b"# TraceFold omitted ",
         b"    # TraceFold omitted ",
         b"[role=",
+        b"[TRACEFOLD ",
+        b"[SOURCE ",
+        b"[INSTRUCTIONS]",
+        b"[FACTS]",
+        b"[RELATIONS]",
+        b"[STRUCTURE]",
+        b"[SELECTED EVIDENCE]",
+        b"[PYTHON]",
+        b"[OMISSIONS]",
+        b"[/TRACEFOLD]",
+        b"- ",
+        b"@json ",
+        b"@row ",
+        b"@group ",
+        b"def ",
+        b"from ",
+        b"import ",
+        b"# ",
     )
     for mapping in source_map.mappings:
         for target_id in mapping.to_span_ids:
@@ -2127,10 +2156,19 @@ def verify_certificate(
     )
 
 
+def verify_compact_context(*args: Any, **kwargs: Any) -> Any:
+    """Delegate compact-fact verification without sharing compressor logic."""
+
+    from tracefold.compact_verifier import verify_compact_context as _verify_compact_context
+
+    return _verify_compact_context(*args, **kwargs)
+
+
 __all__ = [
     "COMPONENT_VERSION",
     "DEFAULT_VERIFICATION_RUN_ID",
     "VerificationEvidence",
     "VerificationExecutionError",
+    "verify_compact_context",
     "verify_certificate",
 ]

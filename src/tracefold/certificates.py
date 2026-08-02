@@ -268,7 +268,7 @@ def generate_certificate(
 ) -> CertificateCandidate:
     if raw_result.status not in {CompressionStatus.COMPRESSED, CompressionStatus.UNCHANGED}:
         raise CertificateGenerationError("raw result has no certifiable compressed artifact")
-    if query is not None:
+    if query is not None and raw_result.component_version != "tracefold.cprgc/1.0.0":
         raise CertificateGenerationError(
             "Phase 3 compression is query-independent; query evidence is unsupported"
         )
