@@ -1,0 +1,1435 @@
+{
+  "architecture": [
+    {
+      "failureBehavior": "Reject malformed input or preserve full context; never truncate silently.",
+      "id": "source",
+      "input": "Messages, files, query",
+      "label": "Source",
+      "output": "Bound source artifacts",
+      "responsibility": "Accept exact source bytes, authority roles, and optional query.",
+      "trustDomain": "compressor"
+    },
+    {
+      "failureBehavior": "Unknown discovery remains unknown; complete preservation is prohibited.",
+      "id": "obligations",
+      "input": "Bound source artifacts",
+      "label": "Obligation discovery",
+      "output": "Typed protected facts",
+      "responsibility": "Discover identifiers, quantities, rules, corrections, code obligations, and anomalies.",
+      "trustDomain": "compressor"
+    },
+    {
+      "failureBehavior": "Ambiguous hard relations block certified emission.",
+      "id": "relations",
+      "input": "Protected facts + structure",
+      "label": "Relation extraction",
+      "output": "Evidence/dependency edges",
+      "responsibility": "Keep ownership, condition, exception, caller/callee, and causal bridges explicit.",
+      "trustDomain": "compressor"
+    },
+    {
+      "failureBehavior": "Reject dangling source references; preserve unresolved edges.",
+      "id": "context-ir",
+      "input": "Facts, relations, spans",
+      "label": "ContextIR",
+      "output": "Typed semantic IR",
+      "responsibility": "Represent exact spans, compact facts, relations, structures, aggregates, and omissions.",
+      "trustDomain": "compressor"
+    },
+    {
+      "failureBehavior": "Report incompressible when mandatory closure exceeds budget.",
+      "id": "cprgc",
+      "input": "IR + requested budget",
+      "label": "CPRGC graph compiler",
+      "output": "Raw compact context",
+      "responsibility": "Select a minimum sufficient connected subgraph and compile deterministic compact context.",
+      "trustDomain": "compressor"
+    },
+    {
+      "failureBehavior": "Synthesized markers never satisfy byte-exact obligations.",
+      "id": "compact",
+      "input": "Selected nodes and edges",
+      "label": "Compact context",
+      "output": "Source-mapped artifact",
+      "responsibility": "Emit exact facts, relation bridges, structure, selected evidence, and omissions.",
+      "trustDomain": "compressor"
+    },
+    {
+      "failureBehavior": "Candidate is not proof until independently checked.",
+      "id": "certificate",
+      "input": "Raw artifact + claims",
+      "label": "Certificate candidate",
+      "output": "Untrusted certificate draft",
+      "responsibility": "Bind hashes, claims, tokenizer identity, source map, and recovery linkage.",
+      "trustDomain": "compressor"
+    },
+    {
+      "failureBehavior": "Emit passed, failed, or indeterminate; never trust compressor flags.",
+      "id": "verifier",
+      "input": "Original + candidate + map",
+      "label": "Independent verifier",
+      "output": "Recomputed observations",
+      "responsibility": "Recompute hashes, counts, obligations, relations, structure, and map validity.",
+      "trustDomain": "verifier"
+    },
+    {
+      "failureBehavior": "Preserve raw failure; fallback reports zero final savings.",
+      "id": "recovery",
+      "input": "Verifier failures + policy",
+      "label": "Recovery controller",
+      "output": "Restored, expanded, or fallback artifact",
+      "responsibility": "Choose emit, restore spans, expand budget, or full fallback and reverify each change.",
+      "trustDomain": "recovery"
+    },
+    {
+      "failureBehavior": "No response means unmeasured, not zero accuracy.",
+      "id": "target",
+      "input": "Full or final context",
+      "label": "Target-model evaluation",
+      "output": "Paired answer evidence",
+      "responsibility": "Measure downstream accuracy, latency, and cost separately from structural proof.",
+      "trustDomain": "target_evaluation"
+    }
+  ],
+  "benchmark": {
+    "benchmarkVersion": "ContextProofBench-v1",
+    "downstreamRetention": {
+      "status": "prepared_only",
+      "value": null
+    },
+    "evidenceScope": "Committed prepared benchmark report; structural evidence only.",
+    "expectedRequestCount": 400,
+    "fixtureIdentity": "reports/final/summary.json + reports/final/benchmark-items.jsonl",
+    "futureMetrics": {
+      "baselineComparison": {},
+      "compression": null,
+      "cost": null,
+      "cprgcAccuracy": null,
+      "failureCounts": {},
+      "fullContextAccuracy": null,
+      "latency": null,
+      "pairedRetention": null,
+      "perSourceRetention": {}
+    },
+    "generatedFromCommit": "0ebdd32a6044030f9514e990cd043a6b1c7a786b",
+    "infrastructureStatus": "ready",
+    "itemCount": 50,
+    "liveRequestCount": 0,
+    "metricSource": "fixture_bytes",
+    "notes": [
+      "Structural demo data is synthetic.",
+      "Fixture-byte metrics are not production tokens.",
+      "Downstream answer retention awaits live or replay inference."
+    ],
+    "preparedMethodCount": 8,
+    "preparedMethods": [
+      {
+        "id": "full_context",
+        "label": "Original context.",
+        "lossy": false
+      },
+      {
+        "id": "head_truncation",
+        "label": "First matched local-token units.",
+        "lossy": true
+      },
+      {
+        "id": "tail_truncation",
+        "label": "Last matched local-token units.",
+        "lossy": true
+      },
+      {
+        "id": "head_tail",
+        "label": "Matched budget split between context ends.",
+        "lossy": true
+      },
+      {
+        "id": "lexical_top_k",
+        "label": "Highest deterministic lexical-overlap chunks.",
+        "lossy": true
+      },
+      {
+        "id": "phase3_extract",
+        "label": "Existing Phase 3 deterministic extractor.",
+        "lossy": true
+      },
+      {
+        "id": "cprgc_target",
+        "label": "CPRGC target mode with verification/recovery.",
+        "lossy": true
+      },
+      {
+        "id": "cprgc_aggressive",
+        "label": "CPRGC aggressive mode with verification/recovery.",
+        "lossy": true
+      }
+    ],
+    "pricingStatus": "unset",
+    "primaryGate": "unmeasured",
+    "sourceKindDistribution": {
+      "dialogue": 10,
+      "document": 10,
+      "json": 10,
+      "log": 10,
+      "python": 10
+    },
+    "structuralReductionByKind": {
+      "dialogue": {
+        "counterIdentity": "fixture byte counter · v1",
+        "modelIdentity": null,
+        "scope": "final",
+        "source": "fixture_bytes",
+        "synthetic": true,
+        "value": 0.706446
+      },
+      "document": {
+        "counterIdentity": "fixture byte counter · v1",
+        "modelIdentity": null,
+        "scope": "final",
+        "source": "fixture_bytes",
+        "synthetic": true,
+        "value": 0.850211
+      },
+      "json": {
+        "counterIdentity": "fixture byte counter · v1",
+        "modelIdentity": null,
+        "scope": "final",
+        "source": "fixture_bytes",
+        "synthetic": true,
+        "value": 0.702192
+      },
+      "log": {
+        "counterIdentity": "fixture byte counter · v1",
+        "modelIdentity": null,
+        "scope": "final",
+        "source": "fixture_bytes",
+        "synthetic": true,
+        "value": 0.703121
+      },
+      "python": {
+        "counterIdentity": "fixture byte counter · v1",
+        "modelIdentity": null,
+        "scope": "final",
+        "source": "fixture_bytes",
+        "synthetic": true,
+        "value": 0.701864
+      }
+    },
+    "targetModelInference": false,
+    "tokenizerAccounting": "fixture_only",
+    "tokenizerIdentity": "Fixture byte counter · v1",
+    "valuesSynthetic": true
+  },
+  "generatedAt": "2000-01-01T00:00:00Z",
+  "generatedFromCommit": "0ebdd32a6044030f9514e990cd043a6b1c7a786b",
+  "limitations": [
+    "Structural demo data is synthetic.",
+    "Fixture-byte metrics are not production tokens.",
+    "Downstream answer retention is currently unmeasured.",
+    "Static mode makes no live target-model requests."
+  ],
+  "mode": "static_demo",
+  "scenarios": [
+    {
+      "certificate": {
+        "failedInvariants": [],
+        "identity": {
+          "certificateHash": "sha256:7d324bd6b956b72d920a81c55b83a00344aa2b813de16286a5c391d8f3a8c0a5",
+          "componentVersions": {
+            "prepared_report": "reports/final/summary.json",
+            "recovery_policy": "Phase 5 contract / fixture path",
+            "source_fixture": "ContextProofBench-v1",
+            "verifier": "reported by prepared artifact"
+          },
+          "compressedArtifactHash": "sha256:857f37a1e1dd20f0c2827d848e0be6c130145897997ad6a3406803c25b9f263c",
+          "normalizedSourceHash": "sha256:19848077124ae7b6f2a6772b64d4962d1c8633cdaab40e9bb3590ceda1993873",
+          "queryHash": null,
+          "sourceHash": "sha256:19848077124ae7b6f2a6772b64d4962d1c8633cdaab40e9bb3590ceda1993873",
+          "tokenizerIdentity": "Fixture byte counter · v1"
+        },
+        "note": "The prepared artifact reports structural verification status. Per-rule observations and complete source-map coverage are not embedded here, so this inspector labels them unreported.",
+        "obligations": {
+          "denominatorMeaning": "prepared verifier classes",
+          "discovered": null,
+          "mandatory": null,
+          "sourceNote": "PreparedContext does not include per-class verifier counts.",
+          "verified": null
+        },
+        "relations": [
+          {
+            "className": "relation.value_unit_owner",
+            "discovered": null,
+            "relationIds": [
+              "rel:relation.value_unit_owner:019bb8dcf21cfbfc"
+            ],
+            "status": "unreported",
+            "verified": null
+          }
+        ],
+        "rules": [
+          {
+            "evidenceSpanIds": [
+              "cpb-document-01:span:00"
+            ],
+            "expected": "source evidence",
+            "id": "ui.rule.1",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "hard",
+            "status": "unreported"
+          },
+          {
+            "evidenceSpanIds": [],
+            "expected": "protected obligations",
+            "id": "ui.rule.2",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "hard",
+            "status": "unreported"
+          },
+          {
+            "evidenceSpanIds": [],
+            "expected": "required relations",
+            "id": "ui.rule.3",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "hard",
+            "status": "unreported"
+          },
+          {
+            "evidenceSpanIds": [],
+            "expected": "source-map binding",
+            "id": "ui.rule.4",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "soft",
+            "status": "unreported"
+          }
+        ],
+        "sourceMap": {
+          "denominatorMeaning": "protected items",
+          "discovered": null,
+          "mandatory": null,
+          "sourceNote": "PreparedContext includes certificate hash but not the complete source map.",
+          "verified": null
+        },
+        "status": "valid",
+        "trustBoundary": [
+          "Compressor proposes.",
+          "Certificate records.",
+          "Verifier recomputes.",
+          "Recovery repairs."
+        ]
+      },
+      "compactContext": "[TRACEFOLD CONTEXT v1]\n[SOURCE 19848077124ae7b6 kind=document]\n[INSTRUCTIONS]\n[FACTS]\n[RELATIONS]\n[STRUCTURE]\n[SELECTED EVIDENCE]\n- identifier.version=v2.7.4\n- numeric.unit=ms owner=gateway-api unit=ms\n- policy.prohibition=prohibited polarity=prohibited\n- logic.quantifier=every\n- identifier.generic=REQ-8842\n- policy.permission=may polarity=permitted\n- temporal.date=2026-08-01\n- numeric.number=3\n- identifier.generic=gateway-api\n- numeric.number=5000\n- rule: Release rule: external transfer is prohibited  -> unless\n- value: 5000 -> ms [owner=gateway-api]\n- structure=source_boundary\nDeployment Operations Handbook\nThe\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nRelease\nRelease rule: external transfer is prohibited\nunless\nException\nwhen\nQuestion-critical\nTeams\nTeams\nTeams\nTeams\n# Deployment Operations Handbook\n- repeated_exact count=52 text=The operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service.\n- repeated_exact count=52 text=Teams record the same checklist before and after ordinary maintenance.\nRelease rule: external transfer is prohibited unless owner_approval = true.\nThe timeout is 5000 ms for gateway-api and the active version is v2.\n7.\n4.\nException: scheduled maintenance may transfer a signed package when ticket=REQ-8842.\nQuestion-critical evidence: rollback begins after 3 failed health checks on 2026-08-01.\n[OMISSIONS]\n- omitted_source_spans=0 reason=optional_redundancy\n[/TRACEFOLD]",
+      "compactFragments": [
+        {
+          "exactness": "byte_exact",
+          "id": "verified-target:fragment:00",
+          "lineEnd": 85,
+          "lineStart": 85,
+          "mappingType": "many_to_one",
+          "obligationIds": [
+            "obl:numeric.number:763a6b1fd8966214"
+          ],
+          "outputKind": "compact_exact_fact",
+          "relationIds": [
+            "rel:relation.value_unit_owner:019bb8dcf21cfbfc"
+          ],
+          "sourceIds": [
+            "src:0:19848077124ae7b6"
+          ],
+          "sourceLabels": [
+            "document evidence · line 65",
+            "fixture span cpb-document-01:span:00"
+          ],
+          "sourceSpanIds": [
+            "cpb-document-01:span:00"
+          ],
+          "text": "The timeout is 5000 ms for gateway-api and the active version is v2."
+        },
+        {
+          "exactness": "byte_exact",
+          "id": "verified-target:fragment:01",
+          "lineEnd": 9,
+          "lineStart": 9,
+          "mappingType": "one_to_one",
+          "obligationIds": [],
+          "outputKind": "compact_exact_fact",
+          "relationIds": [],
+          "sourceIds": [
+            "src:0:19848077124ae7b6"
+          ],
+          "sourceLabels": [
+            "document evidence · line 65",
+            "fixture span cpb-document-01:span:01"
+          ],
+          "sourceSpanIds": [
+            "cpb-document-01:span:01"
+          ],
+          "text": "- numeric.unit=ms owner=gateway-api unit=ms"
+        }
+      ],
+      "description": "A committed Phase 6/7 document fixture with valid prepared structural verification.",
+      "evidenceScope": "Committed sanitized ContextProofBench prepared artifact; structural evidence only.",
+      "fixtureIdentity": "cpb-document-01 / cprgc_target",
+      "generatedFromCommit": "0ebdd32a6044030f9514e990cd043a6b1c7a786b",
+      "id": "verified-target",
+      "label": "Verified target compression",
+      "mode": "target",
+      "query": null,
+      "recovery": null,
+      "result": {
+        "certificateStatus": "valid",
+        "finalAction": "emit",
+        "finalReduction": {
+          "counterIdentity": "fixture byte counter · v1",
+          "modelIdentity": null,
+          "scope": "final",
+          "source": "fixture_bytes",
+          "synthetic": true,
+          "value": 0.8502111522882013
+        },
+        "finalRepairedSize": {
+          "bytes": 1738,
+          "label": "final_repaired",
+          "tokens": null
+        },
+        "originalSize": {
+          "bytes": 11603,
+          "label": "original",
+          "tokens": null
+        },
+        "rawCompressedSize": {
+          "bytes": 1738,
+          "label": "raw_compressed",
+          "tokens": null
+        },
+        "rawReduction": {
+          "counterIdentity": "fixture byte counter · v1",
+          "modelIdentity": null,
+          "scope": "raw",
+          "source": "fixture_bytes",
+          "synthetic": true,
+          "value": 0.8502111522882013
+        },
+        "requestedReduction": {
+          "counterIdentity": "fixture byte counter · v1",
+          "modelIdentity": null,
+          "scope": "raw",
+          "source": "fixture_bytes",
+          "synthetic": true,
+          "value": 0.7
+        },
+        "status": "verified_compressed",
+        "synthetic": true,
+        "tokenizerIdentity": "Fixture byte counter · v1",
+        "verificationStatus": "valid",
+        "warnings": []
+      },
+      "shortLabel": "Verified target compression",
+      "source": {
+        "generatedFrom": "reports/final/benchmark-items.jsonl",
+        "hash": "sha256:19848077124ae7b6f2a6772b64d4962d1c8633cdaab40e9bb3590ceda1993873",
+        "id": "src:0:19848077124ae7b6",
+        "kind": "document",
+        "label": "document / cpb-document-01",
+        "text": "# Deployment Operations Handbook\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nRelease rule: external transfer is prohibited unless owner_approval = true. The timeout is 5000 ms for gateway-api and the active version is v2.7.4.\nException: scheduled maintenance may transfer a signed package when ticket=REQ-8842.\nQuestion-critical evidence: rollback begins after 3 failed health checks on 2026-08-01.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n"
+      },
+      "sourceMap": {
+        "available": false,
+        "coverage": {
+          "denominatorMeaning": "protected items",
+          "discovered": null,
+          "mandatory": null,
+          "sourceNote": "PreparedContext includes certificate hash but not the complete source map.",
+          "verified": null
+        },
+        "mappings": [
+          {
+            "exactness": "byte_exact",
+            "id": "verified-target:fragment:00",
+            "lineEnd": 85,
+            "lineStart": 85,
+            "mappingType": "many_to_one",
+            "obligationIds": [
+              "obl:numeric.number:763a6b1fd8966214"
+            ],
+            "outputKind": "compact_exact_fact",
+            "relationIds": [
+              "rel:relation.value_unit_owner:019bb8dcf21cfbfc"
+            ],
+            "sourceIds": [
+              "src:0:19848077124ae7b6"
+            ],
+            "sourceLabels": [
+              "document evidence · line 65",
+              "fixture span cpb-document-01:span:00"
+            ],
+            "sourceSpanIds": [
+              "cpb-document-01:span:00"
+            ],
+            "text": "The timeout is 5000 ms for gateway-api and the active version is v2."
+          },
+          {
+            "exactness": "byte_exact",
+            "id": "verified-target:fragment:01",
+            "lineEnd": 9,
+            "lineStart": 9,
+            "mappingType": "one_to_one",
+            "obligationIds": [],
+            "outputKind": "compact_exact_fact",
+            "relationIds": [],
+            "sourceIds": [
+              "src:0:19848077124ae7b6"
+            ],
+            "sourceLabels": [
+              "document evidence · line 65",
+              "fixture span cpb-document-01:span:01"
+            ],
+            "sourceSpanIds": [
+              "cpb-document-01:span:01"
+            ],
+            "text": "- numeric.unit=ms owner=gateway-api unit=ms"
+          }
+        ],
+        "note": "Prepared export does not include complete source-map records."
+      },
+      "sourceSpans": [
+        {
+          "id": "cpb-document-01:span:00",
+          "lineEnd": 65,
+          "lineStart": 65,
+          "sourceEnd": 10511,
+          "sourceId": "src:0:19848077124ae7b6",
+          "sourceStart": 10496,
+          "text": "timeout is 5000"
+        },
+        {
+          "id": "cpb-document-01:span:01",
+          "lineEnd": 65,
+          "lineStart": 65,
+          "sourceEnd": 10530,
+          "sourceId": "src:0:19848077124ae7b6",
+          "sourceStart": 10519,
+          "text": "gateway-api"
+        }
+      ],
+      "targetModelInference": false,
+      "valuesSynthetic": true
+    },
+    {
+      "certificate": {
+        "failedInvariants": [
+          "mandatory closure exceeds requested budget"
+        ],
+        "identity": {
+          "certificateHash": null,
+          "componentVersions": {
+            "prepared_report": "reports/final/summary.json",
+            "recovery_policy": "Phase 5 contract / fixture path",
+            "source_fixture": "ContextProofBench-v1",
+            "verifier": "reported by prepared artifact"
+          },
+          "compressedArtifactHash": "sha256:0210a759f224905d87a1cf02109a7dc677f19490c674873ab9ea7f2ed791ca89",
+          "normalizedSourceHash": "sha256:0210a759f224905d87a1cf02109a7dc677f19490c674873ab9ea7f2ed791ca89",
+          "queryHash": null,
+          "sourceHash": "sha256:0210a759f224905d87a1cf02109a7dc677f19490c674873ab9ea7f2ed791ca89",
+          "tokenizerIdentity": "Fixture byte counter · v1"
+        },
+        "note": "The prepared artifact reports structural verification status. Per-rule observations and complete source-map coverage are not embedded here, so this inspector labels them unreported.",
+        "obligations": {
+          "denominatorMeaning": "prepared verifier classes",
+          "discovered": null,
+          "mandatory": null,
+          "sourceNote": "PreparedContext does not include per-class verifier counts.",
+          "verified": null
+        },
+        "relations": [
+          {
+            "className": "relation.value_unit_owner",
+            "discovered": null,
+            "relationIds": [
+              "rel:relation.event_trace:114bab8209a4d606",
+              "rel:relation.event_trace:330ff0304d27e135",
+              "rel:relation.event_trace:412a605f0a42b01d",
+              "rel:relation.event_trace:5442d4b59ad6edbe",
+              "rel:relation.event_trace:77ce008464d20aee",
+              "rel:relation.event_trace:9435e1a267803e22",
+              "rel:relation.event_trace:d85088ad223a845a"
+            ],
+            "status": "unreported",
+            "verified": null
+          }
+        ],
+        "rules": [
+          {
+            "evidenceSpanIds": [
+              "cpb-logs-01:span:00"
+            ],
+            "expected": "source evidence",
+            "id": "ui.rule.1",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "hard",
+            "status": "unreported"
+          },
+          {
+            "evidenceSpanIds": [],
+            "expected": "protected obligations",
+            "id": "ui.rule.2",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "hard",
+            "status": "unreported"
+          },
+          {
+            "evidenceSpanIds": [],
+            "expected": "required relations",
+            "id": "ui.rule.3",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "hard",
+            "status": "unreported"
+          },
+          {
+            "evidenceSpanIds": [],
+            "expected": "source-map binding",
+            "id": "ui.rule.4",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "soft",
+            "status": "unreported"
+          }
+        ],
+        "sourceMap": {
+          "denominatorMeaning": "protected items",
+          "discovered": null,
+          "mandatory": null,
+          "sourceNote": "PreparedContext includes certificate hash but not the complete source map.",
+          "verified": null
+        },
+        "status": "not_run",
+        "trustBoundary": [
+          "Compressor proposes.",
+          "Certificate records.",
+          "Verifier recomputes.",
+          "Recovery repairs."
+        ]
+      },
+      "compactContext": "2026-08-01T00:00:00 INFO service=auth health-check status=ok\n2026-08-01T00:00:01 INFO service=auth health-check status=ok\n2026-08-01T00:00:02 INFO service=auth health-check status=ok\n2026-08-01T00:00:03 INFO service=auth health-check status=ok\n2026-08-01T00:00:04 INFO service=auth health-check status=ok\n2026-08-01T00:00:05 INFO service=auth health-check status=ok\n2026-08-01T00:00:06 INFO service=auth health-check status=ok\n2026-08-01T00:00:07 INFO service=auth health-check status=ok\n2026-08-01T00:00:08 INFO service=auth health-check status=ok\n2026-08-01T00:00:09 INFO service=auth health-check status=ok\n2026-08-01T00:00:10 INFO service=auth health-check status=ok\n2026-08-01T00:00:11 INFO service=auth health-check status=ok\n2026-08-01T00:00:12 INFO service=auth health-check status=ok\n2026-08-01T00:00:13 INFO service=auth health-check status=ok\n2026-08-01T00:00:14 INFO service=auth health-check status=ok\n2026-08-01T00:00:15 INFO service=auth health-check status=ok\n2026-08-01T00:00:16 INFO service=auth health-check status=ok\n2026-08-01T00:00:17 INFO service=auth health-check status=ok\n2026-08-01T00:00:18 INFO service=auth health-check status=ok\n2026-08-01T00:00:19 INFO service=auth health-check status=ok\n2026-08-01T00:00:20 INFO service=auth health-check status=ok\n2026-08-01T00:00:21 INFO service=auth health-check status=ok\n2026-08-01T00:00:22 INFO service=auth health-check status=ok\n2026-08-01T00:00:23 INFO service=auth health-check status=ok\n2026-08-01T00:00:24 INFO service=auth health-check status=ok\n2026-08-01T00:00:25 INFO service=auth health-check status=ok\n2026-08-01T00:00:26 INFO service=auth health-check status=ok\n2026-08-01T00:00:27 INFO service=auth health-check status=ok\n2026-08-01T00:00:28 INFO service=auth health-check status=ok\n2026-08-01T00:00:29 INFO service=auth health-check status=ok\n2026-08-01T00:00:30 INFO service=auth health-check status=ok\n2026-08-01T00:00:31 INFO service=auth health-check status=ok\n2026-08-01T00:00:32 INFO service=auth health-check status=ok\n2026-08-01T00:00:33 INFO service=auth health-check status=ok\n2026-08-01T00:00:34 INFO service=auth health-check status=ok\n2026-08-01T00:00:35 INFO service=auth health-check status=ok\n2026-08-01T00:00:36 INFO service=auth health-check status=ok\n2026-08-01T00:00:37 INFO service=auth health-check status=ok\n2026-08-01T00:00:38 INFO service=auth health-check status=ok\n2026-08-01T00:00:39 INFO service=auth health-check status=ok\n2026-08-01T00:00:40 INFO service=auth health-check status=ok\n2026-08-01T00:00:41 INFO service=auth health-check status=ok\n2026-08-01T00:00:42 INFO service=auth health-check status=ok\n2026-08-01T00:00:43 INFO service=auth health-check status=ok\n2026-08-01T00:00:44 INFO service=auth health-check status=ok\n2026-08-01T00:00:45 INFO service=auth health-check status=ok\n2026-08-01T00:00:46 INFO service=auth health-check status=ok\n2026-08-01T00:00:47 INFO service=auth health-check status=ok\n2026-08-01T00:00:48 INFO service=auth health-check status=ok\n2026-08-01T00:00:49 INFO service=auth health-check status=ok\n2026-08-01T00:00:50 INFO service=auth health-check status=ok\n2026-08-01T00:00:51 INFO service=auth health-check status=ok\n2026-08-01T00:00:52 INFO service=auth health-check status=ok\n2026-08-01T00:00:53 INFO service=auth health-check status=ok\n2026-08-01T00:00:54 INFO service=auth health-check status=ok\n2026-08-01T00:00:55 INFO service=auth health-check status=ok\n2026-08-01T00:00:56 INFO service=auth health-check status=ok\n2026-08-01T00:00:57 INFO service=auth health-check status=ok\n2026-08-01T00:00:58 INFO service=auth health-check status=ok\n2026-08-01T00:00:59 INFO service=auth health-check status=ok\n2026-08-01T00:01:00 INFO service=auth health-check status=ok\n2026-08-01T00:01:01 INFO service=auth health-check status=ok\n2026-08-01T00:01:02 INFO service=auth health-check status=ok\n2026-08-01T00:01:03 INFO service=auth health-check status=ok\n2026-08-01T00:01:04 INFO service=auth health-check status=ok\n2026-08-01T00:01:05 INFO service=auth health-check status=ok\n2026-08-01T00:01:06 INFO service=auth health-check status=ok\n2026-08-01T00:01:07 INFO service=auth health-check status=ok\n2026-08-01T00:01:08 INFO service=auth health-check status=ok\n2026-08-01T00:01:09 INFO service=auth health-check status=ok\n2026-08-01T00:01:10 INFO service=auth health-check status=ok\n2026-08-01T00:01:11 INFO service=auth health-check status=ok\n2026-08-01T00:01:12 INFO service=auth health-check status=ok\n2026-08-01T00:01:13 INFO service=auth health-check status=ok\n2026-08-01T00:01:14 INFO service=auth health-check status=ok\n2026-08-01T00:01:15 INFO service=auth health-check status=ok\n2026-08-01T00:01:16 INFO service=auth health-check status=ok\n2026-08-01T00:01:17 INFO service=auth health-check status=ok\n2026-08-01T00:01:18 INFO service=auth health-check status=ok\n2026-08-01T00:01:19 INFO service=auth health-check status=ok\n2026-08-01T00:01:20 INFO service=auth health-check status=ok\n2026-08-01T00:01:21 INFO service=auth health-check status=ok\n2026-08-01T00:01:22 INFO service=auth health-check status=ok\n2026-08-01T00:01:23 INFO service=auth health-check status=ok\n2026-08-01T00:01:24 INFO service=auth health-check status=ok\n2026-08-01T00:01:25 INFO service=auth health-check status=ok\n2026-08-01T00:01:26 INFO service=auth health-check status=ok\n2026-08-01T00:01:27 INFO service=auth health-check status=ok\n2026-08-01T00:01:28 INFO service=auth health-check status=ok\n2026-08-01T00:01:29 INFO service=auth health-check status=ok\n2026-08-01T00:01:30 INFO service=auth health-check status=ok\n2026-08-01T00:01:31 INFO service=auth health-check status=ok\n2026-08-01T00:01:32 INFO service=auth health-check status=ok\n2026-08-01T00:01:33 INFO service=auth health-check status=ok\n2026-08-01T00:01:34 INFO service=auth health-check status=ok\n2026-08-01T00:01:35 INFO service=auth health-check status=ok\n2026-08-01T00:01:36 INFO service=auth health-check status=ok\n2026-08-01T00:01:37 INFO service=auth health-check status=ok\n2026-08-01T00:01:38 INFO service=auth health-check status=ok\n2026-08-01T00:01:39 INFO service=auth health-check status=ok\n2026-08-01T00:01:40 INFO service=auth health-check status=ok\n2026-08-01T00:01:41 INFO service=auth health-check status=ok\n2026-08-01T00:01:42 INFO service=auth health-check status=ok\n2026-08-01T00:01:43 INFO service=auth health-check status=ok\n2026-08-01T00:01:44 INFO service=auth health-check status=ok\n2026-08-01T00:01:45 INFO service=auth health-check status=ok\n2026-08-01T00:01:46 INFO service=auth health-check status=ok\n2026-08-01T00:01:47 INFO service=auth health-check status=ok\n2026-08-01T00:01:48 INFO service=auth health-check status=ok\n2026-08-01T00:01:49 INFO service=auth health-check status=ok\n2026-08-01T00:01:50 INFO service=auth health-check status=ok\n2026-08-01T00:01:51 INFO service=auth health-check status=ok\n2026-08-01T00:01:52 INFO service=auth health-check status=ok\n2026-08-01T00:01:53 INFO service=auth health-check status=ok\n2026-08-01T00:01:54 INFO service=auth health-check status=ok\n2026-08-01T00:01:55 INFO service=auth health-check status=ok\n2026-08-01T00:01:56 INFO service=auth health-check status=ok\n2026-08-01T00:01:57 INFO service=auth health-check status=ok\n2026-08-01T00:01:58 INFO service=auth health-check status=ok\n2026-08-01T00:01:59 INFO service=auth health-check status=ok\n2026-08-01T09:00:00 WARN service=auth health-check status=degraded trace=trace-rare\n2026-08-01T09:00:01 ERROR service=auth error_code=E42 trace=trace-rare request_id=REQ-77\n2026-08-01T09:00:02 ERROR service=auth predecessor=E41 error_code=E43 trace=trace-rare request_id=REQ-77\n2026-08-01T09:00:03 INFO service=auth recovery status=ok trace=trace-rare request_id=REQ-77\n",
+      "compactFragments": [
+        {
+          "exactness": "byte_exact",
+          "id": "aggressive-incompressible:fragment:00",
+          "lineEnd": 122,
+          "lineStart": 122,
+          "mappingType": "many_to_one",
+          "obligationIds": [
+            "obl:log.severity_change:001dcfe8d2e91a67"
+          ],
+          "outputKind": "compact_exact_fact",
+          "relationIds": [
+            "rel:relation.event_trace:114bab8209a4d606"
+          ],
+          "sourceIds": [
+            "src:3:0210a759f224905d"
+          ],
+          "sourceLabels": [
+            "log evidence · line 122",
+            "fixture span cpb-logs-01:span:00"
+          ],
+          "sourceSpanIds": [
+            "cpb-logs-01:span:00"
+          ],
+          "text": "2026-08-01T09:00:01 ERROR service=auth error_code=E42 trace=trace-rare request_id=REQ-77"
+        }
+      ],
+      "description": "The mandatory closure exceeds the aggressive budget. No false savings is shown.",
+      "evidenceScope": "Committed sanitized ContextProofBench prepared artifact; structural evidence only.",
+      "fixtureIdentity": "cpb-logs-01 / cprgc_aggressive",
+      "generatedFromCommit": "0ebdd32a6044030f9514e990cd043a6b1c7a786b",
+      "id": "aggressive-incompressible",
+      "label": "Aggressive log fixture / budget expansion",
+      "mode": "aggressive",
+      "query": null,
+      "recovery": null,
+      "result": {
+        "certificateStatus": "not_run",
+        "finalAction": "expand_budget",
+        "finalReduction": {
+          "counterIdentity": "fixture byte counter · v1",
+          "modelIdentity": null,
+          "scope": "final",
+          "source": "fixture_bytes",
+          "synthetic": true,
+          "value": null
+        },
+        "finalRepairedSize": {
+          "bytes": 7690,
+          "label": "final_repaired",
+          "tokens": null
+        },
+        "originalSize": {
+          "bytes": 7690,
+          "label": "original",
+          "tokens": null
+        },
+        "rawCompressedSize": {
+          "bytes": 7690,
+          "label": "raw_compressed",
+          "tokens": null
+        },
+        "rawReduction": {
+          "counterIdentity": "fixture byte counter · v1",
+          "modelIdentity": null,
+          "scope": "raw",
+          "source": "fixture_bytes",
+          "synthetic": true,
+          "value": null
+        },
+        "requestedReduction": {
+          "counterIdentity": "fixture byte counter · v1",
+          "modelIdentity": null,
+          "scope": "raw",
+          "source": "fixture_bytes",
+          "synthetic": true,
+          "value": 0.8
+        },
+        "status": "incompressible",
+        "synthetic": true,
+        "tokenizerIdentity": "Fixture byte counter · v1",
+        "verificationStatus": "not_run",
+        "warnings": [
+          "mandatory closure exceeds requested budget"
+        ]
+      },
+      "shortLabel": "Aggressive log fixture / budget expansion",
+      "source": {
+        "generatedFrom": "reports/final/benchmark-items.jsonl",
+        "hash": "sha256:0210a759f224905d87a1cf02109a7dc677f19490c674873ab9ea7f2ed791ca89",
+        "id": "src:3:0210a759f224905d",
+        "kind": "log",
+        "label": "log / cpb-logs-01",
+        "text": "2026-08-01T00:00:00 INFO service=auth health-check status=ok\n2026-08-01T00:00:01 INFO service=auth health-check status=ok\n2026-08-01T00:00:02 INFO service=auth health-check status=ok\n2026-08-01T00:00:03 INFO service=auth health-check status=ok\n2026-08-01T00:00:04 INFO service=auth health-check status=ok\n2026-08-01T00:00:05 INFO service=auth health-check status=ok\n2026-08-01T00:00:06 INFO service=auth health-check status=ok\n2026-08-01T00:00:07 INFO service=auth health-check status=ok\n2026-08-01T00:00:08 INFO service=auth health-check status=ok\n2026-08-01T00:00:09 INFO service=auth health-check status=ok\n2026-08-01T00:00:10 INFO service=auth health-check status=ok\n2026-08-01T00:00:11 INFO service=auth health-check status=ok\n2026-08-01T00:00:12 INFO service=auth health-check status=ok\n2026-08-01T00:00:13 INFO service=auth health-check status=ok\n2026-08-01T00:00:14 INFO service=auth health-check status=ok\n2026-08-01T00:00:15 INFO service=auth health-check status=ok\n2026-08-01T00:00:16 INFO service=auth health-check status=ok\n2026-08-01T00:00:17 INFO service=auth health-check status=ok\n2026-08-01T00:00:18 INFO service=auth health-check status=ok\n2026-08-01T00:00:19 INFO service=auth health-check status=ok\n2026-08-01T00:00:20 INFO service=auth health-check status=ok\n2026-08-01T00:00:21 INFO service=auth health-check status=ok\n2026-08-01T00:00:22 INFO service=auth health-check status=ok\n2026-08-01T00:00:23 INFO service=auth health-check status=ok\n2026-08-01T00:00:24 INFO service=auth health-check status=ok\n2026-08-01T00:00:25 INFO service=auth health-check status=ok\n2026-08-01T00:00:26 INFO service=auth health-check status=ok\n2026-08-01T00:00:27 INFO service=auth health-check status=ok\n2026-08-01T00:00:28 INFO service=auth health-check status=ok\n2026-08-01T00:00:29 INFO service=auth health-check status=ok\n2026-08-01T00:00:30 INFO service=auth health-check status=ok\n2026-08-01T00:00:31 INFO service=auth health-check status=ok\n2026-08-01T00:00:32 INFO service=auth health-check status=ok\n2026-08-01T00:00:33 INFO service=auth health-check status=ok\n2026-08-01T00:00:34 INFO service=auth health-check status=ok\n2026-08-01T00:00:35 INFO service=auth health-check status=ok\n2026-08-01T00:00:36 INFO service=auth health-check status=ok\n2026-08-01T00:00:37 INFO service=auth health-check status=ok\n2026-08-01T00:00:38 INFO service=auth health-check status=ok\n2026-08-01T00:00:39 INFO service=auth health-check status=ok\n2026-08-01T00:00:40 INFO service=auth health-check status=ok\n2026-08-01T00:00:41 INFO service=auth health-check status=ok\n2026-08-01T00:00:42 INFO service=auth health-check status=ok\n2026-08-01T00:00:43 INFO service=auth health-check status=ok\n2026-08-01T00:00:44 INFO service=auth health-check status=ok\n2026-08-01T00:00:45 INFO service=auth health-check status=ok\n2026-08-01T00:00:46 INFO service=auth health-check status=ok\n2026-08-01T00:00:47 INFO service=auth health-check status=ok\n2026-08-01T00:00:48 INFO service=auth health-check status=ok\n2026-08-01T00:00:49 INFO service=auth health-check status=ok\n2026-08-01T00:00:50 INFO service=auth health-check status=ok\n2026-08-01T00:00:51 INFO service=auth health-check status=ok\n2026-08-01T00:00:52 INFO service=auth health-check status=ok\n2026-08-01T00:00:53 INFO service=auth health-check status=ok\n2026-08-01T00:00:54 INFO service=auth health-check status=ok\n2026-08-01T00:00:55 INFO service=auth health-check status=ok\n2026-08-01T00:00:56 INFO service=auth health-check status=ok\n2026-08-01T00:00:57 INFO service=auth health-check status=ok\n2026-08-01T00:00:58 INFO service=auth health-check status=ok\n2026-08-01T00:00:59 INFO service=auth health-check status=ok\n2026-08-01T00:01:00 INFO service=auth health-check status=ok\n2026-08-01T00:01:01 INFO service=auth health-check status=ok\n2026-08-01T00:01:02 INFO service=auth health-check status=ok\n2026-08-01T00:01:03 INFO service=auth health-check status=ok\n2026-08-01T00:01:04 INFO service=auth health-check status=ok\n2026-08-01T00:01:05 INFO service=auth health-check status=ok\n2026-08-01T00:01:06 INFO service=auth health-check status=ok\n2026-08-01T00:01:07 INFO service=auth health-check status=ok\n2026-08-01T00:01:08 INFO service=auth health-check status=ok\n2026-08-01T00:01:09 INFO service=auth health-check status=ok\n2026-08-01T00:01:10 INFO service=auth health-check status=ok\n2026-08-01T00:01:11 INFO service=auth health-check status=ok\n2026-08-01T00:01:12 INFO service=auth health-check status=ok\n2026-08-01T00:01:13 INFO service=auth health-check status=ok\n2026-08-01T00:01:14 INFO service=auth health-check status=ok\n2026-08-01T00:01:15 INFO service=auth health-check status=ok\n2026-08-01T00:01:16 INFO service=auth health-check status=ok\n2026-08-01T00:01:17 INFO service=auth health-check status=ok\n2026-08-01T00:01:18 INFO service=auth health-check status=ok\n2026-08-01T00:01:19 INFO service=auth health-check status=ok\n2026-08-01T00:01:20 INFO service=auth health-check status=ok\n2026-08-01T00:01:21 INFO service=auth health-check status=ok\n2026-08-01T00:01:22 INFO service=auth health-check status=ok\n2026-08-01T00:01:23 INFO service=auth health-check status=ok\n2026-08-01T00:01:24 INFO service=auth health-check status=ok\n2026-08-01T00:01:25 INFO service=auth health-check status=ok\n2026-08-01T00:01:26 INFO service=auth health-check status=ok\n2026-08-01T00:01:27 INFO service=auth health-check status=ok\n2026-08-01T00:01:28 INFO service=auth health-check status=ok\n2026-08-01T00:01:29 INFO service=auth health-check status=ok\n2026-08-01T00:01:30 INFO service=auth health-check status=ok\n2026-08-01T00:01:31 INFO service=auth health-check status=ok\n2026-08-01T00:01:32 INFO service=auth health-check status=ok\n2026-08-01T00:01:33 INFO service=auth health-check status=ok\n2026-08-01T00:01:34 INFO service=auth health-check status=ok\n2026-08-01T00:01:35 INFO service=auth health-check status=ok\n2026-08-01T00:01:36 INFO service=auth health-check status=ok\n2026-08-01T00:01:37 INFO service=auth health-check status=ok\n2026-08-01T00:01:38 INFO service=auth health-check status=ok\n2026-08-01T00:01:39 INFO service=auth health-check status=ok\n2026-08-01T00:01:40 INFO service=auth health-check status=ok\n2026-08-01T00:01:41 INFO service=auth health-check status=ok\n2026-08-01T00:01:42 INFO service=auth health-check status=ok\n2026-08-01T00:01:43 INFO service=auth health-check status=ok\n2026-08-01T00:01:44 INFO service=auth health-check status=ok\n2026-08-01T00:01:45 INFO service=auth health-check status=ok\n2026-08-01T00:01:46 INFO service=auth health-check status=ok\n2026-08-01T00:01:47 INFO service=auth health-check status=ok\n2026-08-01T00:01:48 INFO service=auth health-check status=ok\n2026-08-01T00:01:49 INFO service=auth health-check status=ok\n2026-08-01T00:01:50 INFO service=auth health-check status=ok\n2026-08-01T00:01:51 INFO service=auth health-check status=ok\n2026-08-01T00:01:52 INFO service=auth health-check status=ok\n2026-08-01T00:01:53 INFO service=auth health-check status=ok\n2026-08-01T00:01:54 INFO service=auth health-check status=ok\n2026-08-01T00:01:55 INFO service=auth health-check status=ok\n2026-08-01T00:01:56 INFO service=auth health-check status=ok\n2026-08-01T00:01:57 INFO service=auth health-check status=ok\n2026-08-01T00:01:58 INFO service=auth health-check status=ok\n2026-08-01T00:01:59 INFO service=auth health-check status=ok\n2026-08-01T09:00:00 WARN service=auth health-check status=degraded trace=trace-rare\n2026-08-01T09:00:01 ERROR service=auth error_code=E42 trace=trace-rare request_id=REQ-77\n2026-08-01T09:00:02 ERROR service=auth predecessor=E41 error_code=E43 trace=trace-rare request_id=REQ-77\n2026-08-01T09:00:03 INFO service=auth recovery status=ok trace=trace-rare request_id=REQ-77\n"
+      },
+      "sourceMap": {
+        "available": false,
+        "coverage": {
+          "denominatorMeaning": "protected items",
+          "discovered": null,
+          "mandatory": null,
+          "sourceNote": "PreparedContext includes certificate hash but not the complete source map.",
+          "verified": null
+        },
+        "mappings": [
+          {
+            "exactness": "byte_exact",
+            "id": "aggressive-incompressible:fragment:00",
+            "lineEnd": 122,
+            "lineStart": 122,
+            "mappingType": "many_to_one",
+            "obligationIds": [
+              "obl:log.severity_change:001dcfe8d2e91a67"
+            ],
+            "outputKind": "compact_exact_fact",
+            "relationIds": [
+              "rel:relation.event_trace:114bab8209a4d606"
+            ],
+            "sourceIds": [
+              "src:3:0210a759f224905d"
+            ],
+            "sourceLabels": [
+              "log evidence · line 122",
+              "fixture span cpb-logs-01:span:00"
+            ],
+            "sourceSpanIds": [
+              "cpb-logs-01:span:00"
+            ],
+            "text": "2026-08-01T09:00:01 ERROR service=auth error_code=E42 trace=trace-rare request_id=REQ-77"
+          }
+        ],
+        "note": "Prepared export does not include complete source-map records."
+      },
+      "sourceSpans": [
+        {
+          "id": "cpb-logs-01:span:00",
+          "lineEnd": 122,
+          "lineStart": 122,
+          "sourceEnd": 7457,
+          "sourceId": "src:3:0210a759f224905d",
+          "sourceStart": 7443,
+          "text": "error_code=E42"
+        }
+      ],
+      "targetModelInference": false,
+      "valuesSynthetic": true
+    },
+    {
+      "certificate": {
+        "failedInvariants": [
+          "mandatory_budget_floor",
+          "role.boundary"
+        ],
+        "identity": {
+          "certificateHash": null,
+          "componentVersions": {
+            "prepared_report": "reports/final/summary.json",
+            "recovery_policy": "Phase 5 contract / fixture path",
+            "source_fixture": "ContextProofBench-v1",
+            "verifier": "reported by prepared artifact"
+          },
+          "compressedArtifactHash": "sha256:88c2b3437a9bbf7db3eafe5318018d7ce2a9ded1eeade033481252e40f9e4263",
+          "normalizedSourceHash": "sha256:88c2b3437a9bbf7db3eafe5318018d7ce2a9ded1eeade033481252e40f9e4263",
+          "queryHash": null,
+          "sourceHash": "sha256:88c2b3437a9bbf7db3eafe5318018d7ce2a9ded1eeade033481252e40f9e4263",
+          "tokenizerIdentity": "Fixture byte counter · v1"
+        },
+        "note": "Repository-backed Phase 5 fallback policy fixture. It demonstrates safe full-context identity, not downstream answer retention.",
+        "obligations": {
+          "denominatorMeaning": "fallback identity",
+          "discovered": null,
+          "mandatory": null,
+          "sourceNote": "Fallback verifies exact artifact identity; semantic discovery remains unmeasured.",
+          "verified": null
+        },
+        "relations": [],
+        "rules": [
+          {
+            "evidenceSpanIds": [],
+            "expected": "source evidence",
+            "id": "ui.rule.1",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "hard",
+            "status": "unreported"
+          },
+          {
+            "evidenceSpanIds": [],
+            "expected": "protected obligations",
+            "id": "ui.rule.2",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "hard",
+            "status": "unreported"
+          },
+          {
+            "evidenceSpanIds": [],
+            "expected": "required relations",
+            "id": "ui.rule.3",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "hard",
+            "status": "unreported"
+          },
+          {
+            "evidenceSpanIds": [],
+            "expected": "source-map binding",
+            "id": "ui.rule.4",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "soft",
+            "status": "unreported"
+          }
+        ],
+        "sourceMap": {
+          "denominatorMeaning": "fallback identity",
+          "discovered": null,
+          "mandatory": null,
+          "sourceNote": "No shortened source map is claimed.",
+          "verified": null
+        },
+        "status": "valid",
+        "trustBoundary": [
+          "Compressor proposes.",
+          "Certificate records the failed attempt.",
+          "Verifier recomputes full-context identity.",
+          "Recovery falls back."
+        ]
+      },
+      "compactContext": "System: return JSON only.\nThe service timeout is 15 ms for the primary owner.\nCorrection: the service timeout is 20 ms for the primary owner.\nExcept during maintenance, the service must remain available.\n",
+      "compactFragments": [
+        {
+          "exactness": "byte_exact",
+          "id": "recovery-fallback:fragment:full",
+          "lineEnd": 1,
+          "lineStart": 1,
+          "mappingType": "one_to_one",
+          "obligationIds": [],
+          "outputKind": "exact_copy",
+          "relationIds": [],
+          "sourceIds": [
+            "src:phase5:recovery-document"
+          ],
+          "sourceLabels": [
+            "Full artifact identity; no finer lineage in prepared export"
+          ],
+          "sourceSpanIds": [],
+          "text": "System: return JSON only."
+        }
+      ],
+      "description": "A repository-backed recovery fixture keeps the raw failure visible and returns exact full context with zero final savings.",
+      "evidenceScope": "Repository-backed Phase 5 fallback policy fixture; no target-model inference and no benchmark accuracy.",
+      "fixtureIdentity": "tests/fixtures/phase5/recovery_document.txt",
+      "generatedFromCommit": "0ebdd32a6044030f9514e990cd043a6b1c7a786b",
+      "id": "recovery-fallback",
+      "label": "Recovery fixture / full fallback",
+      "mode": "aggressive",
+      "query": null,
+      "recovery": {
+        "finalAction": "full_fallback",
+        "finalReduction": {
+          "counterIdentity": "fixture byte counter · v1",
+          "modelIdentity": null,
+          "scope": "final",
+          "source": "fixture_bytes",
+          "synthetic": true,
+          "value": 0.0
+        },
+        "note": "Fixture-backed fallback policy: exact full context is retained and final savings is zero.",
+        "rawFailure": "Mandatory evidence cannot fit safely inside requested budget.",
+        "sourceFixture": "tests/fixtures/phase5/recovery_document.txt",
+        "stages": [
+          {
+            "action": "not_recorded",
+            "artifactHash": "sha256:88c2b3437a9bbf7db3eafe5318018d7ce2a9ded1eeade033481252e40f9e4263",
+            "count": 204,
+            "countSource": "fixture_bytes",
+            "effectiveBudget": 32,
+            "failedInvariants": [],
+            "historyHash": null,
+            "label": "Requested compression",
+            "note": "Phase 5 fixture request; exact budget is a fixture policy input.",
+            "number": 1,
+            "restoredSpans": [],
+            "status": "prepared",
+            "verification": "not_run"
+          },
+          {
+            "action": "not_recorded",
+            "artifactHash": "sha256:88c2b3437a9bbf7db3eafe5318018d7ce2a9ded1eeade033481252e40f9e4263",
+            "count": 204,
+            "countSource": "fixture_bytes",
+            "effectiveBudget": 32,
+            "failedInvariants": [],
+            "historyHash": null,
+            "label": "Raw artifact generated",
+            "note": "Full fixture remains available as the safe artifact.",
+            "number": 2,
+            "restoredSpans": [],
+            "status": "prepared",
+            "verification": "not_run"
+          },
+          {
+            "action": "not_recorded",
+            "artifactHash": null,
+            "count": null,
+            "countSource": null,
+            "effectiveBudget": 32,
+            "failedInvariants": [],
+            "historyHash": null,
+            "label": "Certificate generated",
+            "note": "No shortened candidate receives a passing certificate.",
+            "number": 3,
+            "restoredSpans": [],
+            "status": "not_reached",
+            "verification": "not_run"
+          },
+          {
+            "action": "full_fallback",
+            "artifactHash": "sha256:88c2b3437a9bbf7db3eafe5318018d7ce2a9ded1eeade033481252e40f9e4263",
+            "count": 204,
+            "countSource": "fixture_bytes",
+            "effectiveBudget": 32,
+            "failedInvariants": [
+              "mandatory_budget_floor"
+            ],
+            "historyHash": null,
+            "label": "Independent verification",
+            "note": "Fixture policy marks the requested shortened artifact unsafe.",
+            "number": 4,
+            "restoredSpans": [],
+            "status": "failed",
+            "verification": "invalid"
+          },
+          {
+            "action": "full_fallback",
+            "artifactHash": "sha256:88c2b3437a9bbf7db3eafe5318018d7ce2a9ded1eeade033481252e40f9e4263",
+            "count": 204,
+            "countSource": "fixture_bytes",
+            "effectiveBudget": 32,
+            "failedInvariants": [
+              "mandatory_budget_floor",
+              "role.boundary"
+            ],
+            "historyHash": null,
+            "label": "Failed invariant detected",
+            "note": "Raw failure remains visible; no savings is credited.",
+            "number": 5,
+            "restoredSpans": [],
+            "status": "failed",
+            "verification": "invalid"
+          },
+          {
+            "action": "full_fallback",
+            "artifactHash": "sha256:88c2b3437a9bbf7db3eafe5318018d7ce2a9ded1eeade033481252e40f9e4263",
+            "count": null,
+            "countSource": null,
+            "effectiveBudget": 32,
+            "failedInvariants": [
+              "mandatory_budget_floor"
+            ],
+            "historyHash": null,
+            "label": "Action selected",
+            "note": "Fallback selected because exact recovery cannot be proven inside the fixture budget.",
+            "number": 6,
+            "restoredSpans": [],
+            "status": "selected",
+            "verification": "invalid"
+          },
+          {
+            "action": "not_recorded",
+            "artifactHash": null,
+            "count": null,
+            "countSource": null,
+            "effectiveBudget": null,
+            "failedInvariants": [],
+            "historyHash": null,
+            "label": "Exact span restored or budget expanded",
+            "note": "No partial repair is claimed for this fallback fixture.",
+            "number": 7,
+            "restoredSpans": [],
+            "status": "not_reached",
+            "verification": "not_run"
+          },
+          {
+            "action": "not_recorded",
+            "artifactHash": null,
+            "count": null,
+            "countSource": null,
+            "effectiveBudget": null,
+            "failedInvariants": [],
+            "historyHash": null,
+            "label": "Certificate regenerated",
+            "note": "No shortened certificate is issued.",
+            "number": 8,
+            "restoredSpans": [],
+            "status": "not_reached",
+            "verification": "not_run"
+          },
+          {
+            "action": "emit",
+            "artifactHash": "sha256:88c2b3437a9bbf7db3eafe5318018d7ce2a9ded1eeade033481252e40f9e4263",
+            "count": 204,
+            "countSource": "fixture_bytes",
+            "effectiveBudget": 204,
+            "failedInvariants": [],
+            "historyHash": "sha256:d7b2e6d96d90291a59d7731cf0e865a5fca01c228cf15a3bd3c1993a8aa01ba2",
+            "label": "Independently re-verified",
+            "note": "The exact full fixture identity is retained.",
+            "number": 9,
+            "restoredSpans": [],
+            "status": "complete",
+            "verification": "valid"
+          },
+          {
+            "action": "full_fallback",
+            "artifactHash": "sha256:88c2b3437a9bbf7db3eafe5318018d7ce2a9ded1eeade033481252e40f9e4263",
+            "count": 204,
+            "countSource": "fixture_bytes",
+            "effectiveBudget": 204,
+            "failedInvariants": [],
+            "historyHash": "sha256:d7b2e6d96d90291a59d7731cf0e865a5fca01c228cf15a3bd3c1993a8aa01ba2",
+            "label": "Final result",
+            "note": "Full fallback is verified as exact context; final reduction is zero.",
+            "number": 10,
+            "restoredSpans": [],
+            "status": "complete",
+            "verification": "valid"
+          }
+        ],
+        "title": "Phase 5 fallback fixture"
+      },
+      "result": {
+        "certificateStatus": "not_run",
+        "finalAction": "full_fallback",
+        "finalReduction": {
+          "counterIdentity": "fixture byte counter · v1",
+          "modelIdentity": null,
+          "scope": "final",
+          "source": "fixture_bytes",
+          "synthetic": true,
+          "value": 0.0
+        },
+        "finalRepairedSize": {
+          "bytes": 204,
+          "label": "final_repaired",
+          "tokens": null
+        },
+        "originalSize": {
+          "bytes": 204,
+          "label": "original",
+          "tokens": null
+        },
+        "rawCompressedSize": {
+          "bytes": 204,
+          "label": "raw_compressed",
+          "tokens": null
+        },
+        "rawReduction": {
+          "counterIdentity": "fixture byte counter · v1",
+          "modelIdentity": null,
+          "scope": "raw",
+          "source": "fixture_bytes",
+          "synthetic": true,
+          "value": null
+        },
+        "requestedReduction": {
+          "counterIdentity": "fixture byte counter · v1",
+          "modelIdentity": null,
+          "scope": "raw",
+          "source": "fixture_bytes",
+          "synthetic": true,
+          "value": 0.7
+        },
+        "status": "verified_fallback",
+        "synthetic": true,
+        "tokenizerIdentity": "Fixture byte counter · v1",
+        "verificationStatus": "valid",
+        "warnings": []
+      },
+      "shortLabel": "C · Phase 5 full fallback",
+      "source": {
+        "generatedFrom": "tests/fixtures/phase5/recovery_document.txt",
+        "hash": "sha256:88c2b3437a9bbf7db3eafe5318018d7ce2a9ded1eeade033481252e40f9e4263",
+        "id": "src:phase5:recovery-document",
+        "kind": "document",
+        "label": "phase5 / recovery_document.txt",
+        "text": "System: return JSON only.\nThe service timeout is 15 ms for the primary owner.\nCorrection: the service timeout is 20 ms for the primary owner.\nExcept during maintenance, the service must remain available.\n"
+      },
+      "sourceMap": {
+        "available": false,
+        "coverage": {
+          "denominatorMeaning": "fallback identity",
+          "discovered": null,
+          "mandatory": null,
+          "sourceNote": "No shortened source map is claimed.",
+          "verified": null
+        },
+        "mappings": [
+          {
+            "exactness": "byte_exact",
+            "id": "recovery-fallback:fragment:full",
+            "lineEnd": 1,
+            "lineStart": 1,
+            "mappingType": "one_to_one",
+            "obligationIds": [],
+            "outputKind": "exact_copy",
+            "relationIds": [],
+            "sourceIds": [
+              "src:phase5:recovery-document"
+            ],
+            "sourceLabels": [
+              "Full artifact identity; no finer lineage in prepared export"
+            ],
+            "sourceSpanIds": [],
+            "text": "System: return JSON only."
+          }
+        ],
+        "note": "Full fallback identity; no shortened lineage is claimed."
+      },
+      "sourceSpans": [],
+      "targetModelInference": false,
+      "valuesSynthetic": true
+    },
+    {
+      "certificate": {
+        "failedInvariants": [],
+        "identity": {
+          "certificateHash": "sha256:7d324bd6b956b72d920a81c55b83a00344aa2b813de16286a5c391d8f3a8c0a5",
+          "componentVersions": {
+            "prepared_report": "reports/final/summary.json",
+            "recovery_policy": "Phase 5 contract / fixture path",
+            "source_fixture": "ContextProofBench-v1",
+            "verifier": "reported by prepared artifact"
+          },
+          "compressedArtifactHash": "sha256:857f37a1e1dd20f0c2827d848e0be6c130145897997ad6a3406803c25b9f263c",
+          "normalizedSourceHash": "sha256:19848077124ae7b6f2a6772b64d4962d1c8633cdaab40e9bb3590ceda1993873",
+          "queryHash": null,
+          "sourceHash": "sha256:19848077124ae7b6f2a6772b64d4962d1c8633cdaab40e9bb3590ceda1993873",
+          "tokenizerIdentity": "Fixture byte counter · v1"
+        },
+        "note": "Prepared benchmark report only; no certificate is rendered as a scored result.",
+        "obligations": {
+          "denominatorMeaning": "prepared verifier classes",
+          "discovered": null,
+          "mandatory": null,
+          "sourceNote": "PreparedContext does not include per-class verifier counts.",
+          "verified": null
+        },
+        "relations": [
+          {
+            "className": "relation.value_unit_owner",
+            "discovered": null,
+            "relationIds": [
+              "rel:relation.value_unit_owner:019bb8dcf21cfbfc"
+            ],
+            "status": "unreported",
+            "verified": null
+          }
+        ],
+        "rules": [
+          {
+            "evidenceSpanIds": [
+              "cpb-document-01:span:00"
+            ],
+            "expected": "source evidence",
+            "id": "ui.rule.1",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "hard",
+            "status": "unreported"
+          },
+          {
+            "evidenceSpanIds": [],
+            "expected": "protected obligations",
+            "id": "ui.rule.2",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "hard",
+            "status": "unreported"
+          },
+          {
+            "evidenceSpanIds": [],
+            "expected": "required relations",
+            "id": "ui.rule.3",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "hard",
+            "status": "unreported"
+          },
+          {
+            "evidenceSpanIds": [],
+            "expected": "source-map binding",
+            "id": "ui.rule.4",
+            "observed": "Per-rule observation not included in prepared export.",
+            "recommendation": "Open the bound certificate/report artifact when available.",
+            "severity": "soft",
+            "status": "unreported"
+          }
+        ],
+        "sourceMap": {
+          "denominatorMeaning": "protected items",
+          "discovered": null,
+          "mandatory": null,
+          "sourceNote": "PreparedContext includes certificate hash but not the complete source map.",
+          "verified": null
+        },
+        "status": "not_run",
+        "trustBoundary": [
+          "Compressor proposes.",
+          "Certificate records.",
+          "Verifier recomputes.",
+          "Recovery repairs."
+        ]
+      },
+      "compactContext": "[TRACEFOLD CONTEXT v1]\n[SOURCE 19848077124ae7b6 kind=document]\n[INSTRUCTIONS]\n[FACTS]\n[RELATIONS]\n[STRUCTURE]\n[SELECTED EVIDENCE]\n- identifier.version=v2.7.4\n- numeric.unit=ms owner=gateway-api unit=ms\n- policy.prohibition=prohibited polarity=prohibited\n- logic.quantifier=every\n- identifier.generic=REQ-8842\n- policy.permission=may polarity=permitted\n- temporal.date=2026-08-01\n- numeric.number=3\n- identifier.generic=gateway-api\n- numeric.number=5000\n- rule: Release rule: external transfer is prohibited  -> unless\n- value: 5000 -> ms [owner=gateway-api]\n- structure=source_boundary\nDeployment Operations Handbook\nThe\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nTeams\nRelease\nRelease rule: external transfer is prohibited\nunless\nException\nwhen\nQuestion-critical\nTeams\nTeams\nTeams\nTeams\n# Deployment Operations Handbook\n- repeated_exact count=52 text=The operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service.\n- repeated_exact count=52 text=Teams record the same checklist before and after ordinary maintenance.\nRelease rule: external transfer is prohibited unless owner_approval = true.\nThe timeout is 5000 ms for gateway-api and the active version is v2.\n7.\n4.\nException: scheduled maintenance may transfer a signed package when ticket=REQ-8842.\nQuestion-critical evidence: rollback begins after 3 failed health checks on 2026-08-01.\n[OMISSIONS]\n- omitted_source_spans=0 reason=optional_redundancy\n[/TRACEFOLD]",
+      "compactFragments": [
+        {
+          "exactness": "byte_exact",
+          "id": "verified-target:fragment:00",
+          "lineEnd": 85,
+          "lineStart": 85,
+          "mappingType": "many_to_one",
+          "obligationIds": [
+            "obl:numeric.number:763a6b1fd8966214"
+          ],
+          "outputKind": "compact_exact_fact",
+          "relationIds": [
+            "rel:relation.value_unit_owner:019bb8dcf21cfbfc"
+          ],
+          "sourceIds": [
+            "src:0:19848077124ae7b6"
+          ],
+          "sourceLabels": [
+            "document evidence · line 65",
+            "fixture span cpb-document-01:span:00"
+          ],
+          "sourceSpanIds": [
+            "cpb-document-01:span:00"
+          ],
+          "text": "The timeout is 5000 ms for gateway-api and the active version is v2."
+        },
+        {
+          "exactness": "byte_exact",
+          "id": "verified-target:fragment:01",
+          "lineEnd": 9,
+          "lineStart": 9,
+          "mappingType": "one_to_one",
+          "obligationIds": [],
+          "outputKind": "compact_exact_fact",
+          "relationIds": [],
+          "sourceIds": [
+            "src:0:19848077124ae7b6"
+          ],
+          "sourceLabels": [
+            "document evidence · line 65",
+            "fixture span cpb-document-01:span:01"
+          ],
+          "sourceSpanIds": [
+            "cpb-document-01:span:01"
+          ],
+          "text": "- numeric.unit=ms owner=gateway-api unit=ms"
+        }
+      ],
+      "description": "ContextProofBench is prepared across five source kinds; downstream retention remains unmeasured.",
+      "evidenceScope": "Committed prepared benchmark report; no target responses.",
+      "fixtureIdentity": "reports/final/summary.json",
+      "generatedFromCommit": "0ebdd32a6044030f9514e990cd043a6b1c7a786b",
+      "id": "prepared-benchmark",
+      "label": "Prepared benchmark state",
+      "mode": "target",
+      "query": null,
+      "recovery": null,
+      "result": {
+        "certificateStatus": "not_run",
+        "finalAction": "emit",
+        "finalReduction": {
+          "counterIdentity": "fixture byte counter · v1",
+          "modelIdentity": null,
+          "scope": "final",
+          "source": "fixture_bytes",
+          "synthetic": true,
+          "value": 0.8502111522882013
+        },
+        "finalRepairedSize": {
+          "bytes": 1738,
+          "label": "final_repaired",
+          "tokens": null
+        },
+        "originalSize": {
+          "bytes": 11603,
+          "label": "original",
+          "tokens": null
+        },
+        "rawCompressedSize": {
+          "bytes": 1738,
+          "label": "raw_compressed",
+          "tokens": null
+        },
+        "rawReduction": {
+          "counterIdentity": "fixture byte counter · v1",
+          "modelIdentity": null,
+          "scope": "raw",
+          "source": "fixture_bytes",
+          "synthetic": true,
+          "value": 0.8502111522882013
+        },
+        "requestedReduction": {
+          "counterIdentity": "fixture byte counter · v1",
+          "modelIdentity": null,
+          "scope": "raw",
+          "source": "fixture_bytes",
+          "synthetic": true,
+          "value": 0.7
+        },
+        "status": "prepared_only",
+        "synthetic": true,
+        "tokenizerIdentity": "Fixture byte counter · v1",
+        "verificationStatus": "not_run",
+        "warnings": []
+      },
+      "shortLabel": "D · Prepared benchmark",
+      "source": {
+        "generatedFrom": "reports/final/benchmark-items.jsonl",
+        "hash": "sha256:19848077124ae7b6f2a6772b64d4962d1c8633cdaab40e9bb3590ceda1993873",
+        "id": "src:0:19848077124ae7b6",
+        "kind": "document",
+        "label": "document / cpb-document-01",
+        "text": "# Deployment Operations Handbook\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nRelease rule: external transfer is prohibited unless owner_approval = true. The timeout is 5000 ms for gateway-api and the active version is v2.7.4.\nException: scheduled maintenance may transfer a signed package when ticket=REQ-8842.\nQuestion-critical evidence: rollback begins after 3 failed health checks on 2026-08-01.\n\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\nThe operations handbook describes routine deployment review, ownership, rollback preparation, notification, and audit logging for every service. Teams record the same checklist before and after ordinary maintenance.\n"
+      },
+      "sourceMap": {
+        "available": false,
+        "coverage": {
+          "denominatorMeaning": "protected items",
+          "discovered": null,
+          "mandatory": null,
+          "sourceNote": "PreparedContext includes certificate hash but not the complete source map.",
+          "verified": null
+        },
+        "mappings": [
+          {
+            "exactness": "byte_exact",
+            "id": "verified-target:fragment:00",
+            "lineEnd": 85,
+            "lineStart": 85,
+            "mappingType": "many_to_one",
+            "obligationIds": [
+              "obl:numeric.number:763a6b1fd8966214"
+            ],
+            "outputKind": "compact_exact_fact",
+            "relationIds": [
+              "rel:relation.value_unit_owner:019bb8dcf21cfbfc"
+            ],
+            "sourceIds": [
+              "src:0:19848077124ae7b6"
+            ],
+            "sourceLabels": [
+              "document evidence · line 65",
+              "fixture span cpb-document-01:span:00"
+            ],
+            "sourceSpanIds": [
+              "cpb-document-01:span:00"
+            ],
+            "text": "The timeout is 5000 ms for gateway-api and the active version is v2."
+          },
+          {
+            "exactness": "byte_exact",
+            "id": "verified-target:fragment:01",
+            "lineEnd": 9,
+            "lineStart": 9,
+            "mappingType": "one_to_one",
+            "obligationIds": [],
+            "outputKind": "compact_exact_fact",
+            "relationIds": [],
+            "sourceIds": [
+              "src:0:19848077124ae7b6"
+            ],
+            "sourceLabels": [
+              "document evidence · line 65",
+              "fixture span cpb-document-01:span:01"
+            ],
+            "sourceSpanIds": [
+              "cpb-document-01:span:01"
+            ],
+            "text": "- numeric.unit=ms owner=gateway-api unit=ms"
+          }
+        ],
+        "note": "Prepared export does not include complete source-map records."
+      },
+      "sourceSpans": [
+        {
+          "id": "cpb-document-01:span:00",
+          "lineEnd": 65,
+          "lineStart": 65,
+          "sourceEnd": 10511,
+          "sourceId": "src:0:19848077124ae7b6",
+          "sourceStart": 10496,
+          "text": "timeout is 5000"
+        },
+        {
+          "id": "cpb-document-01:span:01",
+          "lineEnd": 65,
+          "lineStart": 65,
+          "sourceEnd": 10530,
+          "sourceId": "src:0:19848077124ae7b6",
+          "sourceStart": 10519,
+          "text": "gateway-api"
+        }
+      ],
+      "targetModelInference": false,
+      "valuesSynthetic": true
+    }
+  ],
+  "schemaVersion": "ui-demo-v1"
+}
