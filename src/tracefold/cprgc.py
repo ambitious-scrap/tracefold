@@ -1192,6 +1192,53 @@ def _section_headers(
     ]
 
 
+_OPTIONAL_SECTION_HEADERS = {
+    "[INSTRUCTIONS]",
+    "[FACTS]",
+    "[RELATIONS]",
+    "[STRUCTURE]",
+    "[SELECTED EVIDENCE]",
+    "[PYTHON]",
+}
+
+
+def _record_section(candidate: CompressionCandidate, extraction: ExtractionResult) -> str | None:
+    instruction_ids = {
+        obligation.obligation_id
+        for obligation in extraction.obligations
+        if obligation.class_name == "instruction.system_developer"
+    }
+    if candidate.candidate_kind == "compact_fact":
+        return "[FACTS]"
+    if candidate.candidate_kind == "compact_relation":
+        return "[RELATIONS]"
+    if candidate.candidate_kind == "structure":
+        return "[STRUCTURE]"
+    if candidate.candidate_kind in {"python_skeleton", "python_exact_node"}:
+        return "[PYTHON]"
+    if instruction_ids.intersection(candidate.obligation_ids):
+        return "[INSTRUCTIONS]"
+    if candidate.candidate_kind not in {"header", "omission", "footer"}:
+        return "[SELECTED EVIDENCE]"
+    return None
+
+
+def _elide_empty_section_headers(
+    candidates: Sequence[CompressionCandidate], extraction: ExtractionResult
+) -> list[CompressionCandidate]:
+    occupied = {
+        section
+        for candidate in candidates
+        if (section := _record_section(candidate, extraction)) is not None
+    }
+    return [
+        candidate
+        for candidate in candidates
+        if candidate.emitted_text not in _OPTIONAL_SECTION_HEADERS
+        or candidate.emitted_text in occupied
+    ]
+
+
 def _footer(
     source: SourceArtifact, tokenizer: Tokenizer, omitted_count: int
 ) -> list[CompressionCandidate]:
@@ -1310,8 +1357,12 @@ def _finalize_selection(
 ) -> tuple[list[CompressionCandidate], list[OmittedSpan], bool]:
     """Rebuild final markers and enforce budget against final rendered bytes."""
 
-    current = [item for item in selected if item.candidate_kind not in {"omission", "footer"}]
+    current = _elide_empty_section_headers(
+        [item for item in selected if item.candidate_kind not in {"omission", "footer"}],
+        extraction,
+    )
     for _ in range(len(current) + 2):
+        current = _elide_empty_section_headers(current, extraction)
         omitted = _omitted_spans(source, extraction, current)
         final = [*current, *_footer(source, tokenizer, len(omitted))]
         if tokenizer.count(_render(final)) <= budget:
@@ -1525,7 +1576,10 @@ def compress_with_cprgc(
         and not (isinstance(node, RelationNode) and not node.mandatory and source.kind != "python")
     ]
     footer = _footer(source, tokenizer, len(extraction.spans))
-    all_candidates = [*headers, *node_candidates, *content_candidates, *footer]
+    all_candidates = _elide_empty_section_headers(
+        [*headers, *node_candidates, *content_candidates, *footer], extraction
+    )
+    headers = [item for item in all_candidates if item.candidate_kind == "header"]
     mandatory = [item for item in all_candidates if item.mandatory]
     original_tokens = tokenizer.count(_text(source))
     requested_budget = target_token_budget or max(1, _mode_budget(original_tokens, mode))

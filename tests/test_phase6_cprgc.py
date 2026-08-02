@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ast
+import hashlib
+import importlib.util
 from statistics import fmean
 from typing import NamedTuple
 
@@ -8,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 import tracefold.cprgc as cprgc
+import tracefold.phase6_report as phase6_report
 from tracefold.compact_verifier import verify_compact_context
 from tracefold.context_ir import build_context_ir, stable_id
 from tracefold.extractors import extract_obligations
@@ -38,12 +41,23 @@ from tracefold.schemas.phase6 import (
 )
 from tracefold.serialization import canonical_json_bytes
 from tracefold.sources import ingest_source
+from tracefold.tokenizers import TiktokenTokenizer
 
 
 class FixtureCase(NamedTuple):
     source: SourceArtifact
     extraction: ExtractionResult
     result: CPRGCResult
+
+
+OPTIONAL_HEADERS = {
+    "[INSTRUCTIONS]",
+    "[FACTS]",
+    "[RELATIONS]",
+    "[STRUCTURE]",
+    "[SELECTED EVIDENCE]",
+    "[PYTHON]",
+}
 
 
 @pytest.fixture(scope="module")
@@ -60,6 +74,127 @@ def target_cases() -> dict[str, FixtureCase]:
         )
         cases[name] = FixtureCase(source, extraction, result)
     return cases
+
+
+def test_empty_sections_are_elided_and_retained_output_stays_mapped(
+    target_cases: dict[str, FixtureCase],
+) -> None:
+    expected = {
+        "document": {"[FACTS]", "[RELATIONS]", "[STRUCTURE]", "[SELECTED EVIDENCE]"},
+        "dialogue": {
+            "[INSTRUCTIONS]",
+            "[FACTS]",
+            "[RELATIONS]",
+            "[STRUCTURE]",
+            "[SELECTED EVIDENCE]",
+        },
+        "json": {"[FACTS]", "[STRUCTURE]", "[SELECTED EVIDENCE]"},
+        "logs": {"[FACTS]", "[RELATIONS]", "[STRUCTURE]", "[SELECTED EVIDENCE]"},
+        "python": {"[FACTS]", "[RELATIONS]", "[STRUCTURE]", "[PYTHON]"},
+    }
+    for name, expected_headers in expected.items():
+        result = target_cases[name].result
+        assert OPTIONAL_HEADERS.intersection(result.context.splitlines()) == expected_headers
+        assert result.verification_report is not None
+        assert result.verification_report.status == VerificationReportStatus.VALID
+        assert result.compact_verification_report is not None
+        assert result.compact_verification_report.status == "valid"
+        assert result.final_result is not None
+        source_map = result.final_result.source_map
+        assert source_map is not None
+        assert source_map.coverage.lineage_coverage == "1.000000"
+
+        compressed_artifact = next(
+            artifact.artifact_id
+            for artifact in source_map.artifacts
+            if artifact.stage.value in {"raw_compressed", "repaired"}
+        )
+        mapped_span_ids = {
+            span_id for mapping in source_map.mappings for span_id in mapping.to_span_ids
+        }
+        mapped_spans = [
+            span
+            for span in source_map.spans
+            if span.artifact_id == compressed_artifact and span.span_id in mapped_span_ids
+        ]
+        offset = 0
+        for line in result.context.splitlines(keepends=True):
+            line_end = offset + len(line.rstrip("\n"))
+            assert any(
+                span.char_start <= offset and line_end <= span.char_end for span in mapped_spans
+            )
+            offset += len(line)
+
+        for omitted_header in OPTIONAL_HEADERS - expected_headers:
+            assert omitted_header not in result.context
+            assert all(
+                result.context[span.char_start : span.char_end] != omitted_header
+                for span in mapped_spans
+            )
+
+
+def test_section_elision_remains_byte_deterministic(
+    target_cases: dict[str, FixtureCase],
+) -> None:
+    case = target_cases["document"]
+    second = cprgc.compress_with_cprgc(
+        case.source,
+        fixture_registry(),
+        tokenizer_identity=Phase6FixtureTokenizer.identity,
+        extraction=case.extraction,
+    )
+    assert second.context.encode("utf-8") == case.result.context.encode("utf-8")
+    assert canonical_json_bytes(second.final_result) == canonical_json_bytes(
+        case.result.final_result
+    )
+
+
+def test_phase6_fixtures_and_mode_thresholds_are_frozen() -> None:
+    expected_hashes = {
+        "dense": "769f6b2f38c3a395fff1bce42abf7b24b0d999b66c9fc0ec3157236e0604d289",
+        "dialogue": "5f86b8fcc97a35acf58e55437aeca9b56ad9bc1b4bec92267dd2b8617d85645b",
+        "document": "19848077124ae7b6f2a6772b64d4962d1c8633cdaab40e9bb3590ceda1993873",
+        "json": "89f5e56dc162a31bd6d52854e0bcf42f056b9d8a57dbba907f02c2f1c29b342c",
+        "logs": "0210a759f224905d87a1cf02109a7dc677f19490c674873ab9ea7f2ed791ca89",
+        "python": "0b852b760a42f800094bf92896ce2823b48e2c85385bff7864f77c5b80ce6241",
+    }
+    assert {
+        name: hashlib.sha256((fixture.text or "").encode("utf-8")).hexdigest()
+        for name, fixture in long_fixture_inputs().items()
+    } == expected_hashes
+    assert cprgc.MODE_REDUCTION_BASIS_POINTS == {
+        CPRGCMode.CONSERVATIVE: 5000,
+        CPRGCMode.TARGET: 7000,
+        CPRGCMode.AGGRESSIVE: 8000,
+    }
+
+
+@pytest.mark.skipif(importlib.util.find_spec("tiktoken") is None, reason="optional tiktoken")
+def test_phase6_report_keeps_tokenizer_metrics_separate_and_recalculates_cl100k() -> None:
+    fixture_record = phase6_report._fixture_record("python", CPRGCMode.TARGET)
+    assert fixture_record["reduction_metric"] == "fixture_byte_reduction"
+
+    tokenizer = TiktokenTokenizer("cl100k_base")
+    configured_record = phase6_report._fixture_record(
+        "python",
+        CPRGCMode.TARGET,
+        tokenizer=tokenizer,
+        reduction_label="configured_tokenizer_reduction",
+    )
+    assert configured_record["reduction_metric"] == "configured_tokenizer_reduction"
+    assert configured_record["tokenizer_identity"] == tokenizer.identity.model_dump(mode="json")
+    assert configured_record["original_tokens"] == tokenizer.count(
+        long_fixture_inputs()["python"].text or ""
+    )
+    final_tokens = configured_record["final_tokens"]
+    if final_tokens is None:
+        assert configured_record["final_reduction"] is None
+    else:
+        original_tokens = configured_record["original_tokens"]
+        assert isinstance(final_tokens, int)
+        assert isinstance(original_tokens, int)
+        expected_reduction = 1 - final_tokens / original_tokens
+        assert configured_record["final_reduction"] == f"{expected_reduction:.6f}"
 
 
 def test_context_ir_ids_facts_and_rendering_are_deterministic(
