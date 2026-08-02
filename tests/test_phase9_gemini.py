@@ -265,7 +265,7 @@ def test_scored_report_writes_incomplete_claim_freeze(tmp_path: Path) -> None:
             prepared,
             TargetResponse(
                 request_id=deterministic_run_id(prepared.method_id),
-                model_id="gemini-2.5-flash-lite",
+                model_id="gemini-3.1-flash-lite",
                 answer_text=answer,
                 status=TargetStatus.SUCCESS,
             ),

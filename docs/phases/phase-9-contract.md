@@ -15,11 +15,11 @@ tokenizer configuration, and the separate `parallel/ui-golden-demo` branch are f
 
 Provider endpoint class is Google Gemini through the official OpenAI-compatible chat
 endpoint at `generativelanguage.googleapis.com`. The originally preferred
-`gemini-2.5-flash` returned HTTP 404 because it is unavailable to new users. The frozen
-replacement is stable `gemini-2.5-flash-lite`, selected from the official project model
-catalog as the cheapest active stable text model. Deprecated `gemini-2.0-flash-lite`
-shut down June 1, 2026 and is not eligible. Preview models and silent model substitution
-are forbidden. Returned
+`gemini-2.5-flash` and catalog-listed `gemini-2.5-flash-lite` returned HTTP 404 because
+they are unavailable to new users. The frozen replacement is stable
+`gemini-3.1-flash-lite`, the next cheapest active stable text model in official pricing.
+Deprecated `gemini-2.0-flash-lite` shut down June 1, 2026 and is not eligible. Preview
+models and silent model substitution are forbidden. Returned
 model identity must remain consistent after the first benchmark response.
 
 ## Credential handling
@@ -133,7 +133,7 @@ CPRGC verification, complete mandatory coverage, complete applicable relation co
 separate infrastructure failures, no fallback counted as positive compression, and
 honest provider-usage availability.
 
-Passing permits only benchmark-scoped Gemini 2.5 Flash-Lite retention counts, four
+Passing permits only benchmark-scoped Gemini 3.1 Flash-Lite retention counts, four
 compressible fixture classes above 70% configured `cl100k_base` context reduction,
 Python incompressibility at the protected floor, and measured emitted/fallback-adjusted
 reductions. Failing freezes the measured lower retention and its failure classes.
