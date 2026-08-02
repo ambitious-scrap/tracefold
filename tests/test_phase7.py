@@ -93,6 +93,7 @@ def test_target_live_parses_usage_and_response_without_logging_secrets() -> None
         nonlocal calls
         calls += 1
         assert req.headers["authorization"] == "Bearer test-secret"
+        assert str(req.url) == "https://target.example/v1/chat/completions"
         return httpx.Response(
             200,
             json={
@@ -106,7 +107,7 @@ def test_target_live_parses_usage_and_response_without_logging_secrets() -> None
 
     response = TargetAdapter(
         _settings(TargetMode.LIVE),
-        api_base_url="https://target.example",
+        api_base_url="https://target.example/v1",
         api_key="test-secret",
         transport=httpx.MockTransport(handler),
         allow_live=True,

@@ -241,6 +241,10 @@ class TargetAdapter:
             return base, "chat"
         if base.endswith("/responses"):
             return base, "responses"
+        if base.endswith("/v1"):
+            if self.settings.endpoint_class == "responses":
+                return base + "/responses", "responses"
+            return base + "/chat/completions", "chat"
         if self.settings.endpoint_class == "responses":
             return base + "/v1/responses", "responses"
         return base + "/v1/chat/completions", "chat"
