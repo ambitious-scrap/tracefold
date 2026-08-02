@@ -745,7 +745,7 @@ def _request_for(
         context=prepared.context,
         temperature=settings.temperature,
         maximum_output_tokens=settings.maximum_output_tokens,
-        seed=settings.seed,
+        seed=settings.seed if settings.seed_supported else None,
         timeout_seconds=settings.request_timeout_seconds,
         metadata={
             "benchmark_version": BENCHMARK_VERSION,
@@ -1073,6 +1073,8 @@ def _manifest(
     tokenizer: Tokenizer,
     pricing_config: PricingConfig | None = None,
     inter_request_delay_seconds: float = 0,
+    random_seed: int | None = 0,
+    target_seed_supported: bool = True,
 ) -> BenchmarkRun:
     commit = _git_commit()
     identity = tokenizer.identity
@@ -1117,7 +1119,8 @@ def _manifest(
             if pricing_config is not None
             else None
         ),
-        random_seed=0,
+        random_seed=random_seed,
+        target_seed_supported=target_seed_supported,
         inter_request_delay_seconds=inter_request_delay_seconds,
         failures=[],
         environment_summary={

@@ -345,6 +345,8 @@ def _run_live_phase8(
         model_id=adapter.settings.model_id,
         tokenizer=tokenizer,
         inter_request_delay_seconds=adapter.settings.inter_request_delay_seconds,
+        random_seed=adapter.settings.seed if adapter.settings.seed_supported else None,
+        target_seed_supported=adapter.settings.seed_supported,
     )
     (output_dir / "run-manifest.json").write_bytes(
         canonical_json_bytes(manifest.model_dump(mode="json")) + b"\n"

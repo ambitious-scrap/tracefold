@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-import httpx
+import json
 
-from tracefold.benchmark import _manifest, deterministic_run_id
+import httpx
+import pytest
+
+from tracefold.benchmark import _manifest, _request_for, deterministic_run_id, prepare_contexts
+from tracefold.phase7_fixtures import build_context_proof_bench
 from tracefold.schemas.phase7 import (
     BenchmarkRunMode,
     TargetMode,
@@ -91,12 +95,14 @@ def test_retry_after_is_respected_and_provider_secret_is_sanitized() -> None:
             return httpx.Response(429, headers={"Retry-After": "5"}, request=request)
         return httpx.Response(
             400,
-            json={
-                "error": {
-                    "code": "bad_request",
-                    "message": "Authorization: Bearer test-secret rejected",
+            json=[
+                {
+                    "error": {
+                        "code": "bad_request",
+                        "message": "Authorization: Bearer test-secret rejected",
+                    }
                 }
-            },
+            ],
             request=request,
         )
 
@@ -114,6 +120,47 @@ def test_retry_after_is_respected_and_provider_secret_is_sanitized() -> None:
     assert response.error_message == "Authorization: Bearer [redacted] rejected"
 
 
+def test_gemini_seed_capability_omits_seed_for_every_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "TRACEFOLD_API_BASE_URL",
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    )
+    monkeypatch.setenv("TRACEFOLD_API_KEY", "test-secret")
+    monkeypatch.setenv("TRACEFOLD_TARGET_MODEL", "gemini-test")
+    monkeypatch.setenv("TRACEFOLD_TARGET_SUPPORTS_SEED", "0")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "seed" not in json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "model": "gemini-test",
+                "choices": [{"message": {"content": "READY"}, "finish_reason": "stop"}],
+            },
+            request=request,
+        )
+
+    adapter = TargetAdapter.from_environment(
+        mode=TargetMode.LIVE,
+        transport=httpx.MockTransport(handler),
+        allow_live=True,
+    )
+    item = build_context_proof_bench()[0]
+    prepared = prepare_contexts(
+        (item,),
+        tokenizer=TiktokenTokenizer("cl100k_base"),
+        method_ids=("full_context",),
+        compiler_commit="compiler-test",
+        benchmark_runner_commit="runner-test",
+    )[0]
+    request = _request_for(item, prepared, adapter.settings)
+    assert adapter.settings.seed_supported is False
+    assert request.seed is None
+    assert adapter.invoke(request).status == TargetStatus.SUCCESS
+
+
 def test_manifest_records_inter_request_delay() -> None:
     manifest = _manifest(
         mode=BenchmarkRunMode.SMOKE_LIVE,
@@ -122,5 +169,9 @@ def test_manifest_records_inter_request_delay() -> None:
         model_id="gemini-test",
         tokenizer=TiktokenTokenizer("cl100k_base"),
         inter_request_delay_seconds=7,
+        random_seed=None,
+        target_seed_supported=False,
     )
     assert manifest.inter_request_delay_seconds == 7
+    assert manifest.random_seed is None
+    assert manifest.target_seed_supported is False

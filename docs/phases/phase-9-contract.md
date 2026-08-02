@@ -40,6 +40,11 @@ or model-access failures stop benchmark inference.
 Unsupported request fields are never silently removed. A provider capability change must
 be typed, documented, tested, committed, and followed by a fresh preflight.
 
+Gemini preflight returned `Invalid JSON payload received. Unknown name "seed": Cannot
+find field.` The typed `TRACEFOLD_TARGET_SUPPORTS_SEED=0` capability therefore omits seed
+for every method in Gemini runs. Other providers retain the default seed-supported
+behavior. Manifests record the capability and a null random seed when seed is omitted.
+
 ## Deterministic pacing and retries
 
 Live requests use `TRACEFOLD_INTER_REQUEST_DELAY_SECONDS=7`. Delay occurs between live

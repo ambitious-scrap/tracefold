@@ -51,6 +51,11 @@ def replay_record_hash(record: ReplayRecord) -> str:
     return _hash_payload(record.model_dump(mode="json", exclude={"replay_record_hash"}))
 
 
+def _environment_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    return default if value is None else value.casefold() not in {"0", "false", "no"}
+
+
 def load_replay_records(path: str | Path) -> tuple[ReplayRecord, ...]:
     records: list[ReplayRecord] = []
     request_hashes: set[str] = set()
@@ -147,6 +152,7 @@ class TargetAdapter:
             temperature=0.0,
             maximum_output_tokens=128,
             seed=0,
+            seed_supported=_environment_bool("TRACEFOLD_TARGET_SUPPORTS_SEED", True),
             maximum_retries=2,
             inter_request_delay_seconds=float(
                 os.getenv("TRACEFOLD_INTER_REQUEST_DELAY_SECONDS", "0")
@@ -405,7 +411,11 @@ def _sanitize_provider_text(value: object, *, secret: str | None) -> str:
 def _provider_error(response: httpx.Response, *, secret: str | None) -> tuple[str, str]:
     try:
         payload = response.json()
+        if isinstance(payload, list) and payload and isinstance(payload[0], dict):
+            payload = payload[0]
         error = payload.get("error", {}) if isinstance(payload, dict) else {}
+        if not isinstance(error, dict):
+            error = {}
         code = _sanitize_provider_text(
             error.get("code", f"HTTP_{response.status_code}"), secret=secret
         )

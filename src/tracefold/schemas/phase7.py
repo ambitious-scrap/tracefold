@@ -86,6 +86,7 @@ class TargetSettings(StrictModel):
     temperature: float = Field(ge=0, le=2)
     maximum_output_tokens: int = Field(gt=0)
     seed: int | None = None
+    seed_supported: bool = True
     maximum_retries: int = Field(ge=0, le=2)
     inter_request_delay_seconds: float = Field(default=0, ge=0, le=120)
 
@@ -314,6 +315,7 @@ class BenchmarkRun(StrictModel):
     run_timestamp: datetime
     pricing_config_hash: HashValue | None = None
     random_seed: int | None = None
+    target_seed_supported: bool = True
     inter_request_delay_seconds: float = Field(default=0, ge=0, le=120)
     failures: list[str] = Field(default_factory=list)
     environment_summary: dict[str, str] = Field(default_factory=dict)
