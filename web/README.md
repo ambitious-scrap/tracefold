@@ -5,10 +5,10 @@ compiles long context into a smaller source-mapped representation and makes
 the certificate, verifier boundary, recovery history, and benchmark limits
 visible.
 
-The visual system uses a vibrant rose/cobalt SaaS palette. Fira Sans is the
-preferred UI family with a system fallback; Fira Code/SF Mono is reserved for
-source evidence, hashes, and compact metrics. No remote font dependency is
-required.
+The visual system uses a restrained navy/slate/cobalt SaaS palette. Fira Sans
+is the preferred UI family with a system fallback; Fira Code/SF Mono is
+reserved for source evidence, hashes, and compact metrics. No remote font
+dependency is required.
 
 ## Install and run
 

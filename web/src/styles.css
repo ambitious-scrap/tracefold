@@ -3,30 +3,30 @@
   font-family: var(--font-sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --ink: oklch(0.19 0.03 260);
-  --ink-muted: oklch(0.38 0.04 260);
-  --ink-soft: oklch(0.53 0.035 260);
-  --paper: oklch(0.985 0.012 260);
-  --paper-dim: oklch(0.95 0.025 260);
-  --paper-line: oklch(0.85 0.035 260);
-  --graphite: oklch(0.24 0.04 260);
-  --graphite-raised: oklch(0.29 0.045 260);
-  --graphite-line: oklch(0.43 0.045 260);
-  --white: oklch(0.998 0.003 260);
-  --oxblood: oklch(0.58 0.19 258);
-  --oxblood-dark: oklch(0.43 0.16 258);
-  --cyan: oklch(0.74 0.15 190);
-  --cyan-dark: oklch(0.43 0.12 190);
-  --amber: oklch(0.8 0.16 80);
-  --amber-dark: oklch(0.47 0.12 78);
-  --red: oklch(0.56 0.18 25);
-  --green: oklch(0.56 0.15 151);
-  --coral: oklch(0.68 0.2 32);
-  --coral-dark: oklch(0.47 0.17 32);
-  --surface-cobalt: oklch(0.94 0.05 258);
-  --surface-coral: oklch(0.95 0.06 32);
-  --surface-mint: oklch(0.95 0.065 151);
-  --surface-sky: oklch(0.94 0.055 220);
+  --ink: oklch(0.18 0.025 255);
+  --ink-muted: oklch(0.39 0.03 255);
+  --ink-soft: oklch(0.55 0.025 255);
+  --paper: oklch(0.985 0.008 250);
+  --paper-dim: oklch(0.95 0.012 250);
+  --paper-line: oklch(0.87 0.02 250);
+  --graphite: oklch(0.17 0.025 255);
+  --graphite-raised: oklch(0.23 0.03 255);
+  --graphite-line: oklch(0.39 0.035 255);
+  --white: oklch(0.998 0.002 250);
+  --oxblood: oklch(0.55 0.16 250);
+  --oxblood-dark: oklch(0.4 0.12 250);
+  --cyan: oklch(0.72 0.12 200);
+  --cyan-dark: oklch(0.43 0.08 210);
+  --amber: oklch(0.78 0.13 80);
+  --amber-dark: oklch(0.46 0.1 78);
+  --red: oklch(0.55 0.16 25);
+  --green: oklch(0.54 0.13 151);
+  --coral: oklch(0.62 0.13 230);
+  --coral-dark: oklch(0.45 0.11 245);
+  --surface-cobalt: oklch(0.955 0.025 250);
+  --surface-coral: oklch(0.965 0.02 230);
+  --surface-mint: oklch(0.965 0.025 160);
+  --surface-sky: oklch(0.96 0.025 220);
   --font-sans: "Fira Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
   --mono: "Fira Code", "SF Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
   --radius-sm: 5px;
@@ -1059,4 +1059,83 @@ code, .mono, .section-kicker, .landing-kicker, .rail-label, .topbar__context, .c
   .landing-hero h1 { font-size: clamp(2.8rem, 13vw, 4.35rem); }
   .landing-hero__lede { font-size: 16px; }
   .code-line code { font-size: 11px; }
+}
+
+/* Professional SaaS pass: navy authority, cobalt action, semantic color only. */
+.topbar { background: var(--ink); }
+.guide-button, .primary-button { border-color: var(--oxblood-dark); background: var(--oxblood); color: var(--white); }
+.guide-button:hover, .primary-button:hover { background: var(--oxblood-dark); }
+.coordinate-cross { color: var(--cyan); }
+.side-rail .rail-label, .rail-footer code { color: var(--cyan); }
+.nav-item.is-active { border-color: oklch(0.55 0.11 250); background: oklch(0.28 0.06 250); }
+.nav-item.is-active svg { color: var(--cyan); }
+.guide-strip { border-bottom-color: var(--paper-line); background: var(--surface-cobalt); }
+.guide-strip span:first-child { color: var(--oxblood-dark); }
+.hero-aside, .demo-banner { border-color: var(--paper-line); background: var(--surface-cobalt); }
+.demo-banner__dot { border-color: var(--amber-dark); background: var(--amber); }
+.control-plane { border-top-color: var(--oxblood); }
+.segmented-control button.is-selected { border-color: var(--oxblood); background: var(--surface-cobalt); color: var(--oxblood-dark); }
+.result-header, .source-map { border-top-color: var(--oxblood); }
+.metric-cell, .metric-cell:nth-child(1), .metric-cell:nth-child(2), .metric-cell:nth-child(3), .metric-cell:nth-child(4), .metric-cell:nth-child(5), .metric-cell:nth-child(6) { background: var(--white); }
+.metric-cell:nth-child(6) { background: var(--surface-cobalt); }
+.context-pane--source { background: var(--surface-sky); }
+.context-pane--compact { background: var(--surface-cobalt); }
+.context-pane--compact .code-line:hover { background: oklch(0.93 0.03 250); }
+.context-pane--compact .code-line.is-selected { border-color: var(--cyan-dark); background: oklch(0.9 0.045 210); }
+.code-line--compact_exact_fact, .code-line--compact_exact_relation { background: transparent; }
+.code-line--compact_exact_fact.is-selected { background: oklch(0.92 0.05 210); }
+.code-line--compact_exact_relation.is-selected { background: oklch(0.9 0.045 250); }
+.line-marker, .code-line--compact_exact_fact .line-marker, .code-line--compact_exact_relation .line-marker { color: var(--cyan-dark); }
+.lineage-detail { border-color: var(--cyan-dark); background: var(--surface-cobalt); }
+.recovery-summary { border-color: oklch(0.78 0.08 80); background: oklch(0.97 0.04 80); }
+.recovery-summary__metric { border-left-color: oklch(0.74 0.09 80); }
+.benchmark-fact, .benchmark-fact:nth-child(1), .benchmark-fact:nth-child(2), .benchmark-fact:nth-child(3), .benchmark-fact:nth-child(4) { background: var(--white); }
+.benchmark-fact:nth-child(1) { background: var(--surface-cobalt); }
+.status-block--empty { background: var(--surface-cobalt); }
+.pipeline { background: var(--surface-sky); }
+.pipeline-stage:hover, .pipeline-stage.is-selected { border-color: var(--oxblood); background: var(--surface-cobalt); }
+.pipeline-stage--verifier.is-selected { border-color: var(--green); background: var(--surface-mint); }
+.architecture-boundary { background: var(--ink); }
+
+.landing-brand__mark { background: var(--ink); }
+.landing-brand__mark span:first-child { color: var(--cyan); }
+.landing-nav__links a:hover { color: var(--oxblood-dark); }
+.landing-nav__cta, .landing-button--primary { border-color: var(--oxblood-dark); background: var(--oxblood); color: var(--white); }
+.landing-nav__cta:hover, .landing-button--primary:hover { background: var(--oxblood-dark); }
+.landing-button--quiet { border-color: var(--paper-line); color: var(--oxblood-dark); }
+.landing-button--quiet:hover { border-color: var(--oxblood); background: var(--surface-cobalt); color: var(--oxblood-dark); }
+.landing-hero::before { background-image: radial-gradient(circle, oklch(0.55 0.16 250 / 0.16) 1.5px, transparent 1.5px); opacity: 0.58; }
+.landing-hero__accent { color: var(--oxblood); text-decoration-color: var(--cyan); }
+.landing-kicker { color: var(--oxblood-dark); }
+.landing-status-dot { border-color: var(--green); background: var(--green); }
+.landing-instrument { border-color: var(--oxblood-dark); }
+.landing-instrument::after { background: var(--cyan); }
+.landing-instrument__topline { background: var(--surface-cobalt); }
+.landing-instrument__metrics div:nth-child(1), .landing-instrument__metrics div:nth-child(2), .landing-instrument__metrics div:nth-child(3) { background: var(--white); }
+.landing-instrument__metrics div:nth-child(3) { background: var(--surface-cobalt); }
+.landing-source-lines { background: var(--surface-sky); }
+.landing-compact-lines { background: var(--surface-cobalt); }
+.landing-source-lines .is-highlight { background: oklch(0.91 0.04 210); }
+.landing-compact-lines .is-highlight { background: oklch(0.9 0.045 250); }
+.landing-compact-lines em { color: var(--cyan-dark); }
+.landing-proof-strip { background: var(--ink); }
+.landing-proof-strip div:nth-child(3) strong { color: var(--cyan); }
+.landing-method { border-block: 1px solid var(--paper-line); background: var(--paper); }
+.landing-method__steps article, .landing-method__steps article:nth-child(2), .landing-method__steps article:nth-child(3) { background: var(--white); border-color: var(--paper-line); }
+.landing-step-mark, .landing-method__steps button:hover { color: var(--oxblood-dark); }
+.landing-method__steps h3 { color: var(--ink); }
+.landing-boundary { background: var(--ink); }
+.landing-boundary__flow { border-color: var(--graphite-line); background: var(--graphite-raised); }
+.landing-boundary__item--compressor { color: var(--cyan); }
+.landing-boundary__item--certificate { color: oklch(0.78 0.08 250); }
+.landing-boundary__item--verifier { color: oklch(0.7 0.12 151); }
+.landing-boundary__item--recovery { color: var(--amber); }
+.landing-evidence { border-bottom-color: var(--paper-line); background: var(--surface-cobalt); }
+.landing-evidence__facts { background: var(--white); border-left-color: var(--paper-line); }
+.landing-evidence__facts > div, .landing-evidence__facts > div:nth-child(1), .landing-evidence__facts > div:nth-child(2), .landing-evidence__facts > div:nth-child(3), .landing-evidence__facts > div:nth-child(4) { background: var(--white); border-color: var(--paper-line); }
+.landing-evidence__facts > div:nth-child(1) { background: var(--surface-cobalt); }
+.landing-evidence__facts > div:nth-child(4) strong { color: var(--amber-dark); }
+
+@media (max-width: 600px) {
+  .landing-evidence__facts > div:nth-child(1) { background: var(--surface-cobalt); }
 }
