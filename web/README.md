@@ -5,10 +5,11 @@ compiles long context into a smaller source-mapped representation and makes
 the certificate, verifier boundary, recovery history, and benchmark limits
 visible.
 
-The visual system uses a restrained navy/slate/cobalt SaaS palette. Fira Sans
-is the preferred UI family with a system fallback; Fira Code/SF Mono is
-reserved for source evidence, hashes, and compact metrics. No remote font
-dependency is required.
+The visual system uses an editorial graphite/cool-white SaaS palette with a
+single cobalt product accent and separate semantic evidence colors. Inter
+Tight leads display typography, Inter handles interface copy, and IBM Plex
+Mono is reserved for source evidence, hashes, and compact metrics. The landing
+page loads those families from Google Fonts and retains system fallbacks.
 
 ## Install and run
 
