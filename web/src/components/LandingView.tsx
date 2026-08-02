@@ -91,9 +91,9 @@ export function LandingView({ benchmark, scenario, onNavigate }: { benchmark?: B
       </section>
 
       <section className="landing-proof-strip" aria-label="TraceFold principles">
-        <div><span>01</span><strong>Source mapped</strong><p>Compact fragments point back to recorded source evidence.</p></div>
-        <div><span>02</span><strong>Independently verified</strong><p>Structural checks are recomputed outside the compressor.</p></div>
-        <div><span>03</span><strong>Claims stay bounded</strong><p>Answer retention remains unmeasured until valid inference exists.</p></div>
+        <div><strong>Source mapped</strong><p>Compact fragments point back to recorded source evidence.</p></div>
+        <div><strong>Independently verified</strong><p>Structural checks are recomputed outside the compressor.</p></div>
+        <div><strong>Claims stay bounded</strong><p>Answer retention remains unmeasured until valid inference exists.</p></div>
       </section>
 
       <section className="landing-section landing-method" id="method" aria-labelledby="method-title">

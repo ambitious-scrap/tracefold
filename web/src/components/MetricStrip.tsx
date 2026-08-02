@@ -20,9 +20,9 @@ export function MetricStrip({
   return (
     <section className="metric-strip" aria-label="Compression result metrics">
       <Metric label="Original size" value={formatPrimarySize(original)} detail={sizeDetail(original)} />
-      <Metric label="Raw compressed" value={formatPrimarySize(raw)} detail={`${sizeDetail(raw)} · raw artifact`} tone="neutral" />
-      <Metric label="Final repaired" value={formatPrimarySize(final)} detail={`${sizeDetail(final)} · final artifact`} tone="verified" />
-      <Metric label="Requested" value={formatReduction(requested)} detail={reductionLabel(requested)} />
+      <Metric label="Raw artifact size" value={formatPrimarySize(raw)} detail={sizeDetail(raw)} tone="neutral" />
+      <Metric label="Final artifact size" value={formatPrimarySize(final)} detail={sizeDetail(final)} tone="verified" />
+      <Metric label="Requested reduction" value={formatReduction(requested)} detail={reductionLabel(requested)} />
       <Metric label="Raw reduction" value={formatReduction(rawReduction)} detail={reductionLabel(rawReduction)} />
       <Metric label="Final reduction" value={formatReduction(finalReduction)} detail={reductionLabel(finalReduction)} tone="verified" />
     </section>

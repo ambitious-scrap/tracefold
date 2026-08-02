@@ -38,7 +38,7 @@ describe("metric-source safety", () => {
 
   it("renders unmeasured benchmark retention without an empty accuracy chart", () => {
     render(<BenchmarksView benchmark={makeBundle().benchmark} />);
-    expect(screen.getAllByText("Downstream accuracy not yet measured").length).toBeGreaterThan(1);
+    expect(screen.getByText("Downstream accuracy is unmeasured")).toBeInTheDocument();
     expect(screen.getByText("Prepared only")).toBeInTheDocument();
     expect(screen.getAllByText("Unmeasured").length).toBeGreaterThan(0);
     expect(screen.queryByRole("img", { name: /accuracy/i })).not.toBeInTheDocument();

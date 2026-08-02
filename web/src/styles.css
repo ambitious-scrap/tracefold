@@ -1567,3 +1567,62 @@ h1, h2, h3, .view-header h1, .view-header--hero h1 { font-family: var(--font-dis
   .timeline-item { grid-template-columns: 42px minmax(0, 1fr); gap: 8px; }
   .benchmark-fact:first-child { background: var(--saas-cobalt); }
 }
+
+/* Impeccable clarify + distill: remove decorative scaffolding and keep the task primary. */
+.main-shell { background-color: #f4f6f8; background-image: none; }
+.app-shell h1, .app-shell h2, .app-shell h3,
+.view-header h1, .view-header--hero h1,
+.control-plane__heading h2, .panel-heading h2, .source-map__toolbar h2,
+.result-heading h2, .metric-value, .coverage-block strong,
+.timeline-item__label, .benchmark-fact strong, .pipeline-stage strong {
+  font-family: var(--font-sans);
+}
+.view-header h1 { max-width: 19ch; font-size: 4.25rem; font-weight: 600; letter-spacing: -.035em; line-height: .96; }
+.view-header--hero h1 { max-width: 16ch; font-size: 4.75rem; }
+.view-header::after, .nav-item::after,
+.control-plane::before, .result-header::before, .source-map::before,
+.identity-panel::before, .coverage-panel::before, .rules-panel::before,
+.timeline-panel::before, .benchmark-table-panel::before, .stage-inspector::before { display: none; }
+.section-kicker { color: #5365aa; font-family: var(--font-sans); font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.panel-heading .section-kicker, .control-plane .section-kicker,
+.source-map .section-kicker, .status-block .section-kicker,
+.stage-inspector .section-kicker { display: none; }
+.nav-item.is-active { box-shadow: none; }
+.hero-aside, .view-header__stamp { backdrop-filter: none; box-shadow: none; }
+.control-plane, .result-header, .source-map, .identity-panel, .coverage-panel,
+.rules-panel, .timeline-panel, .benchmark-table-panel, .status-block,
+.stage-inspector, .proof-trust-line, .benchmark-facts, .architecture-boundary,
+.recovery-summary { box-shadow: none; }
+.control-plane, .result-header, .source-map, .identity-panel, .coverage-panel,
+.rules-panel, .timeline-panel, .benchmark-table-panel, .status-block,
+.stage-inspector { border-top-color: #cfd6e0; }
+.code-line { border-left: 0; }
+.code-line.is-selected { border-color: transparent; background: #dff4f7; box-shadow: inset 0 0 0 1px #72bfd0; }
+.context-pane--compact .code-line.is-selected { border-left-color: transparent; background: #e5eaff; box-shadow: inset 0 0 0 1px #91a2eb; }
+.landing-boundary__disclaimer { padding: 12px 14px; border: 1px solid #354257; border-left: 1px solid #354257; border-radius: 7px; background: #121923; }
+.result-context, .stage-context { color: #6f7785; font-family: var(--mono); font-size: 10px; }
+.error-callout code { display: block; margin-top: 7px; color: #7e3940; font-family: var(--mono); font-size: 9px; }
+.guide-strip { gap: 18px; }
+.guide-strip strong { font-weight: 600; }
+
+.landing-shell--editorial .landing-hero h1 { max-width: 14ch; font-size: clamp(4rem, 7vw, 6rem); font-weight: 540; letter-spacing: -.04em; line-height: .92; }
+.landing-shell--editorial .landing-section__intro h2,
+.landing-shell--editorial .landing-boundary h2 { font-size: clamp(3.25rem, 4.8vw, 5rem); letter-spacing: -.04em; line-height: .95; }
+.landing-final-cta h2 { font-size: clamp(3.25rem, 5.5vw, 5.5rem); letter-spacing: -.04em; line-height: .95; }
+.landing-shell--editorial .landing-kicker { letter-spacing: .02em; text-transform: none; }
+.landing-shell--editorial .landing-instrument { border-color: #292f3a; box-shadow: 0 4px 8px rgba(0,0,0,.28); }
+.landing-shell--editorial .landing-proof-strip strong { margin-top: 0; }
+.landing-product-stage__halo, .landing-hero__trace { display: none; }
+.landing-shell--editorial .landing-evidence__facts,
+.landing-shell--editorial .landing-boundary__flow { box-shadow: none; }
+.pipeline-stage:hover { transform: none; }
+.pipeline-stage.is-selected { box-shadow: none; }
+
+@media (max-width: 900px) {
+  .view-header h1, .view-header--hero h1 { font-size: 3.75rem; }
+}
+
+@media (max-width: 600px) {
+  .view-header h1, .view-header--hero h1 { font-size: 3rem; letter-spacing: -.03em; }
+  .landing-shell--editorial .landing-hero h1 { font-size: clamp(3.25rem, 14vw, 4.5rem); }
+}
